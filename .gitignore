@@ -8,3 +8,10 @@ gen
 .gradle
 build/
 test-temp
+
+.classpath
+.project
+.settings/
+.vscode/
+bin/
+
