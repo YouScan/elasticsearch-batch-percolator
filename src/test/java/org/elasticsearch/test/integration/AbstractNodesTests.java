@@ -23,12 +23,15 @@ import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.Requests;
+import org.elasticsearch.common.Classes;
 import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.io.FileSystemUtils;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.network.NetworkUtils;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.settings.SettingsException;
+import org.elasticsearch.common.settings.loader.SettingsLoaderFactory;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -39,6 +42,7 @@ import org.elasticsearch.search.highlight.HighlightBuilder;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.nio.file.Paths;
 import java.util.Collections;
@@ -65,6 +69,7 @@ public abstract class AbstractNodesTests {
 
     private static Settings defaultSettings = Settings
             .settingsBuilder()
+            .put("path.home", BASE_DIR) // createTempDir()
             .put("path.data", BASE_DIR)
             .put("cluster.name", "test-cluster-" + NetworkUtilsLegacy.getLocalAddress().getHostName())
             .put(InternalSettingsPreparer.IGNORE_SYSTEM_PROPERTIES_SETTING, true)
@@ -120,10 +125,10 @@ public abstract class AbstractNodesTests {
     }
 
     public static Node buildNode(String id, Settings settings) {
-        String settingsSource = AbstractNodesTests.class.getName().replace('.', '/') + ".yml";
+        // String settingsSource = AbstractNodesTests.class.getName().replace('.', '/') + ".yml";
         Settings finalSettings = Settings.settingsBuilder()
-                //.loadFromClasspath(settingsSource)
-                .loadFromPath(Paths.get(settingsSource))
+                // .loadFromClasspath(settingsSource)
+                // .loadFromPath(Paths.get(settingsSource))
                 .put(defaultSettings)
                 .put(settings)
                 .put("name", id)
