@@ -26,10 +26,12 @@ import org.elasticsearch.common.inject.AbstractModule;
  */
 public class BatchPercolatorShardModule extends AbstractModule {
 
+    public static final BatchPercolatorShardModule INSTANCE = new BatchPercolatorShardModule();
+
+    private BatchPercolatorShardModule() { }
+
     @Override
     protected void configure() {
         bind(BatchPercolatorQueriesRegistry.class).asEagerSingleton();
     }
-
-
 }

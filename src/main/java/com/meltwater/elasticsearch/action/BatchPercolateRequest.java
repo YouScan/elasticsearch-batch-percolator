@@ -18,8 +18,9 @@
  */
 package com.meltwater.elasticsearch.action;
 
+import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionRequestValidationException;
-import org.elasticsearch.action.support.broadcast.BroadcastOperationRequest;
+import org.elasticsearch.action.support.broadcast.BroadcastRequest;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -32,7 +33,7 @@ import static org.elasticsearch.action.ValidateActions.addValidationError;
 /**
  *
  */
-public class BatchPercolateRequest extends BroadcastOperationRequest<BatchPercolateRequest> {
+public class BatchPercolateRequest extends BroadcastRequest<BatchPercolateRequest> {
 
     private String documentType;
     private BytesReference source;
@@ -45,7 +46,7 @@ public class BatchPercolateRequest extends BroadcastOperationRequest<BatchPercol
     }
 
     public BatchPercolateRequest(BatchPercolateRequest request, BytesReference docSource) {
-        super(request.indices());
+        super(request);
         this.documentType = request.getDocumentType();
         this.source = request.source;
         this.startTime = request.startTime;

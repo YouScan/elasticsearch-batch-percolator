@@ -1,6 +1,5 @@
 package org.elasticsearch.test.batchpercolator.rest;
 
-import com.jayway.jsonpath.Filter;
 import com.jayway.jsonpath.JsonPath;
 import com.meltwater.elasticsearch.action.BatchPercolateSourceBuilder;
 import com.meltwater.elasticsearch.index.BatchPercolatorService;
@@ -8,29 +7,21 @@ import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.Response;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.collect.ImmutableList;
-import org.elasticsearch.common.collect.ImmutableMap;
-import org.elasticsearch.common.collect.Lists;
 import org.elasticsearch.common.xcontent.json.JsonXContent;
 import org.elasticsearch.search.highlight.HighlightBuilder;
 import org.elasticsearch.test.integration.AbstractNodesTests;
-import org.hamcrest.CoreMatchers;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-import static com.jayway.jsonpath.Criteria.where;
-import static com.jayway.jsonpath.Filter.filter;
 import static com.meltwater.elasticsearch.action.BatchPercolateSourceBuilder.docBuilder;
 import static org.elasticsearch.common.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.index.query.QueryBuilders.termQuery;
-import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;

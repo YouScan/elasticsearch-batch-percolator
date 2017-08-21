@@ -1,7 +1,7 @@
 package com.meltwater.elasticsearch.action;
 
+import com.google.common.collect.Maps;
 import com.meltwater.elasticsearch.shard.QueryMatch;
-import org.elasticsearch.common.collect.Maps;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;

@@ -18,42 +18,56 @@
  */
 package com.meltwater.elasticsearch.shard;
 
-import org.apache.lucene.index.AtomicReader;
-import org.apache.lucene.index.AtomicReaderContext;
+import com.google.common.collect.Maps;
+import org.apache.lucene.index.FieldInfo;
+import org.apache.lucene.index.LeafReader;
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.Collector;
+import org.apache.lucene.search.LeafCollector;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.util.BytesRef;
-import org.elasticsearch.common.collect.Maps;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.index.fielddata.IndexFieldData;
 import org.elasticsearch.index.fielddata.IndexFieldDataService;
 import org.elasticsearch.index.fielddata.SortedBinaryDocValues;
-import org.elasticsearch.index.fieldvisitor.JustSourceFieldsVisitor;
-import org.elasticsearch.index.mapper.FieldMapper;
+import org.elasticsearch.index.fieldvisitor.FieldsVisitor;
+import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.index.mapper.MapperService;
+import org.elasticsearch.index.mapper.internal.SourceFieldMapper;
 
 import java.io.IOException;
 import java.util.Map;
 
 /**
  */
-final class BatchQueriesLoaderCollector extends Collector {
+final class BatchQueriesLoaderCollector implements Collector, LeafCollector {
 
     public static final String ID_FIELD = "id";
     private final Map<String, QueryAndSource> queries = Maps.newHashMap();
-    private final JustSourceFieldsVisitor fieldsVisitor = new JustSourceFieldsVisitor();
+    private final FieldsVisitor fieldsVisitor;
     private final BatchPercolatorQueriesRegistry percolator;
     private final IndexFieldData idFieldData;
     private final ESLogger logger;
 
     private SortedBinaryDocValues idValues;
-    private AtomicReader reader;
+    private LeafReader reader;
 
     BatchQueriesLoaderCollector(BatchPercolatorQueriesRegistry percolator, ESLogger logger, MapperService mapperService, IndexFieldDataService indexFieldDataService) {
         this.percolator = percolator;
         this.logger = logger;
-        final FieldMapper<?> idMapper = mapperService.smartNameFieldMapper(ID_FIELD); //we use our own ID field.
+
+        final MappedFieldType idMapper = mapperService.smartNameFieldType(ID_FIELD); //we use our own ID field.
         this.idFieldData = indexFieldDataService.getForField(idMapper);
+
+        this.fieldsVisitor = new FieldsVisitor(true){
+            @Override
+            public Status needsField(FieldInfo fieldInfo) throws IOException {
+                if (SourceFieldMapper.NAME.equals(fieldInfo.name)) {
+                    return Status.YES;
+                }
+                return source != null ? Status.STOP : Status.NO;
+            }
+        };
     }
 
     public Map<String, QueryAndSource> queries() {
@@ -82,17 +96,23 @@ final class BatchQueriesLoaderCollector extends Collector {
     }
 
     @Override
-    public void setNextReader(AtomicReaderContext context) throws IOException {
+    public final LeafCollector getLeafCollector(LeafReaderContext context) throws IOException {
+        doSetNextReader(context);
+        return this;
+    }
+
+    private void doSetNextReader(LeafReaderContext context) throws IOException {
         reader = context.reader();
         idValues = idFieldData.load(context).getBytesValues();
     }
 
     @Override
-    public void setScorer(Scorer scorer) throws IOException {
+    public boolean needsScores() {
+        return false;
     }
 
     @Override
-    public boolean acceptsDocsOutOfOrder() {
-        return true;
+    public void setScorer(Scorer scorer) throws IOException {
+        // no-op by default
     }
 }

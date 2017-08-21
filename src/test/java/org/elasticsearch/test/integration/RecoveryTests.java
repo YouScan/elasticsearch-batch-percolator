@@ -5,7 +5,6 @@ import com.meltwater.elasticsearch.action.BatchPercolateResponse;
 import com.meltwater.elasticsearch.action.BatchPercolateSourceBuilder;
 import com.meltwater.elasticsearch.index.BatchPercolatorService;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.settings.Settings;
 import org.junit.AfterClass;
 import org.junit.Ignore;
@@ -30,7 +29,7 @@ public class RecoveryTests extends AbstractNodesTests {
     @Test
     @Ignore("This issue exists in official percolator as well. Fixed in elasticsearch 2.0")
     public void testRestartNode() throws IOException, ExecutionException, InterruptedException {
-        Settings extraSettings = ImmutableSettings.settingsBuilder()
+        Settings extraSettings = Settings.settingsBuilder()
                 .put("index.gateway.type", "local").build();
 
         logger.info("--> Starting one nodes");

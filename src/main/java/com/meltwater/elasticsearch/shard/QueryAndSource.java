@@ -18,9 +18,9 @@
  */
 package com.meltwater.elasticsearch.shard;
 
+import com.google.common.base.Optional;
 import org.apache.lucene.search.Filter;
 import org.apache.lucene.search.Query;
-import org.elasticsearch.common.base.Optional;
 import org.elasticsearch.common.bytes.BytesReference;
 
 /**
@@ -28,10 +28,10 @@ import org.elasticsearch.common.bytes.BytesReference;
  */
 public class QueryAndSource {
     final Query query;
-    final Optional<Filter> limitingFilter;
+    final Optional<Query> limitingFilter;
     final BytesReference source;
 
-    public QueryAndSource(Query query, Optional<Filter> limitingFilter, BytesReference source) {
+    public QueryAndSource(Query query, Optional<Query> limitingFilter, BytesReference source) {
         this.query = query;
         this.limitingFilter = limitingFilter;
         this.source = source;
@@ -41,7 +41,7 @@ public class QueryAndSource {
         return query;
     }
 
-    public Optional<Filter> getLimitingFilter() {
+    public Optional<Query> getLimitingFilter() {
         return limitingFilter;
     }
 

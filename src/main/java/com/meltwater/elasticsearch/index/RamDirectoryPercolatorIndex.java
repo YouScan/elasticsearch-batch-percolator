@@ -46,12 +46,12 @@ public class RamDirectoryPercolatorIndex {
     public Directory indexDocuments(List<ParsedDocument> parsedDocuments) {
         try{
             Directory directory = new RAMDirectory();
-            IndexWriterConfig conf = new IndexWriterConfig(Version.LUCENE_4_10_4,
+            IndexWriterConfig conf = new IndexWriterConfig(
                     mapperService.analysisService().defaultIndexAnalyzer());
             IndexWriter iwriter = new IndexWriter(directory, conf);
             for(ParsedDocument document : parsedDocuments){
                 for(ParseContext.Document doc : document.docs()){
-                    iwriter.addDocument(doc, document.analyzer());
+                    iwriter.addDocument(doc);
                 }
             }
             iwriter.close();

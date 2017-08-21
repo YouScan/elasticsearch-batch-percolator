@@ -18,42 +18,40 @@
  */
 package com.meltwater.elasticsearch.index;
 
+import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import com.meltwater.elasticsearch.action.BatchPercolateResponseItem;
 import com.meltwater.elasticsearch.action.BatchPercolateShardRequest;
 import com.meltwater.elasticsearch.action.BatchPercolateShardResponse;
 import com.meltwater.elasticsearch.shard.BatchPercolatorQueriesRegistry;
 import com.meltwater.elasticsearch.shard.QueryAndSource;
 import com.meltwater.elasticsearch.shard.QueryMatch;
-import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.*;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Counter;
 import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.ElasticsearchIllegalArgumentException;
 import org.elasticsearch.ElasticsearchParseException;
 import org.elasticsearch.action.search.SearchType;
-import org.elasticsearch.cache.recycler.CacheRecycler;
 import org.elasticsearch.cache.recycler.PageCacheRecycler;
 import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.action.index.MappingUpdatedAction;
-import org.elasticsearch.common.base.Optional;
+import org.elasticsearch.common.ParseFieldMatcher;
+import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.collect.ImmutableMap;
-import org.elasticsearch.common.collect.Maps;
-import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.xcontent.*;
 import org.elasticsearch.index.IndexService;
 import org.elasticsearch.index.engine.Engine;
-import org.elasticsearch.index.mapper.DocumentMapper;
-import org.elasticsearch.index.mapper.MapperService;
-import org.elasticsearch.index.mapper.ParsedDocument;
+import org.elasticsearch.index.mapper.*;
 import org.elasticsearch.index.query.ParsedQuery;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.ShardId;
@@ -77,6 +75,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 
+import static org.elasticsearch.search.SearchService.DEFAULT_SEARCH_TIMEOUT;
+import static org.elasticsearch.search.SearchService.NO_TIMEOUT;
+
 /**
  * For each request, the {@link BatchPercolatorService#percolate} function is
  * called on each shard which contains percolation queries.
@@ -92,7 +93,6 @@ public class BatchPercolatorService extends AbstractComponent {
     public final static String TYPE_NAME = ".batchpercolator";
 
     private final IndicesService indicesService;
-    private final CacheRecycler cacheRecycler;
     private final PageCacheRecycler pageCacheRecycler;
     private final BigArrays bigArrays;
     private final ClusterService clusterService;
@@ -100,11 +100,14 @@ public class BatchPercolatorService extends AbstractComponent {
     private final HighlightPhase highlightPhase;
     private final ScriptService scriptService;
     private final MappingUpdatedAction mappingUpdatedAction;
+    private final ParseFieldMatcher parseFieldMatcher;
     private QueryPhase queryPhase;
     private FetchPhase fetchPhase;
 
+    private volatile TimeValue defaultSearchTimeout;
+
     @Inject
-    public BatchPercolatorService(Settings settings, IndicesService indicesService, CacheRecycler cacheRecycler,
+    public BatchPercolatorService(Settings settings, IndicesService indicesService,
                                   PageCacheRecycler pageCacheRecycler, BigArrays bigArrays,
                                   HighlightPhase highlightPhase, ClusterService clusterService,
                                   ScriptService scriptService,
@@ -113,8 +116,8 @@ public class BatchPercolatorService extends AbstractComponent {
                                   FetchPhase fetchPhase) {
         super(settings);
         this.indicesService = indicesService;
-        this.cacheRecycler = cacheRecycler;
         this.pageCacheRecycler = pageCacheRecycler;
+        this.parseFieldMatcher = new ParseFieldMatcher(settings);
         this.bigArrays = bigArrays;
         this.clusterService = clusterService;
         this.highlightPhase = highlightPhase;
@@ -122,6 +125,8 @@ public class BatchPercolatorService extends AbstractComponent {
         this.mappingUpdatedAction = mappingUpdatedAction;
         this.queryPhase = queryPhase;
         this.fetchPhase = fetchPhase;
+
+        defaultSearchTimeout = settings.getAsTime(DEFAULT_SEARCH_TIMEOUT, NO_TIMEOUT);
     }
 
     public BatchPercolateShardResponse percolate(BatchPercolateShardRequest request) throws IOException {
@@ -135,10 +140,10 @@ public class BatchPercolatorService extends AbstractComponent {
 
         List<ParsedDocument> parsedDocuments = parseRequest(percolateIndexService, request);
         if (percolateQueries.isEmpty()) {
-            return new BatchPercolateShardResponse(emptyPeroclateResponses(parsedDocuments),
+            return new BatchPercolateShardResponse(emptyPercolateResponses(parsedDocuments),
                     request.shardId().getIndex(), request.shardId().id());
         } else if (parsedDocuments == null) {
-            throw new ElasticsearchIllegalArgumentException("Nothing to percolate");
+            throw new ElasticsearchException("Nothing to percolate");
         }
 
         // We use a RAMDirectory here instead of a MemoryIndex.
@@ -163,7 +168,7 @@ public class BatchPercolatorService extends AbstractComponent {
 
         directory.close();
         context.close();
-        percolateIndexService.fixedBitSetFilterCache().clear("Done percolating "+requestId);
+        percolateIndexService.cache().bitsetFilterCache().clear("Done percolating "+requestId);
         percolateIndexService.fieldData().clear();
         percolateIndexService.cache().clear("Done percolating "+requestId);
         return new BatchPercolateShardResponse(responses, request.shardId().getIndex(), request.shardId().id());
@@ -190,17 +195,17 @@ public class BatchPercolatorService extends AbstractComponent {
         return filteredQueries;
     }
 
-    private boolean hasDocumentMatchingFilter(IndexReader reader, Optional<Filter> optionalFilter) throws IOException {
+    private boolean hasDocumentMatchingFilter(IndexReader reader, Optional<Query> optionalFilter) throws IOException {
         if(optionalFilter.isPresent()){
-            Filter filter = optionalFilter.get();
+            Query filter = optionalFilter.get();
             boolean found = false;
             // If you are not familiar with Lucene, this basically means that we try to
             // create an iterator for valid id:s for the filter for the given reader.
             // The filter and DocIdSet can both return null, to enable optimisations,
             // thus the null-checks. Null means that there were no matching docs, and
             // the same is true if the iterator refers to NO_MORE_DOCS immediately.
-            for(AtomicReaderContext leaf:reader.leaves()) {
-                DocIdSet idSet = filter.getDocIdSet(leaf, leaf.reader().getLiveDocs());
+            for(LeafReaderContext leaf:reader.leaves()) {
+                DocIdSet idSet = new QueryWrapperFilter(filter).getDocIdSet(leaf, leaf.reader().getLiveDocs());
                 if (idSet != null) {
                     DocIdSetIterator iter = idSet.iterator();
                     if (iter != null && iter.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
@@ -240,22 +245,28 @@ public class BatchPercolatorService extends AbstractComponent {
                                               Directory directory) throws IOException {
         SearchShardTarget searchShardTarget = new SearchShardTarget(clusterService.localNode().id(),
                 request.shardId().getIndex(), request.shardId().id());
+
+        ShardSearchLocalRequest shardSearchLocalRequest = new ShardSearchLocalRequest(new ShardId("local_index", 0), 0, SearchType.QUERY_AND_FETCH, null, null, false);
+        DocSearcher docSearcher = new DocSearcher(new IndexSearcher(DirectoryReader.open(directory)));
+        Counter counter = Counter.newCounter();
+
         return new DefaultSearchContext(
                 0,
-                new ShardSearchLocalRequest(new ShardId("local_index",0), 0, SearchType.QUERY_AND_FETCH, null, null, false),
+                shardSearchLocalRequest,
                 searchShardTarget,
-                new DocSearcher(new IndexSearcher(DirectoryReader.open(directory))),
+                docSearcher,
                 percolateIndexService,
                 indexShard,
                 scriptService,
-                cacheRecycler,
                 pageCacheRecycler,
                 bigArrays,
-                Counter.newCounter()
+                counter,
+                parseFieldMatcher,
+                defaultSearchTimeout
         );
     }
 
-    private Map<String, BatchPercolateResponseItem> emptyPeroclateResponses(List<ParsedDocument> parsedDocuments) {
+    private Map<String, BatchPercolateResponseItem> emptyPercolateResponses(List<ParsedDocument> parsedDocuments) {
         Map<String, BatchPercolateResponseItem> items = Maps.newHashMap();
         for(ParsedDocument document : parsedDocuments){
             items.put(document.id(),
@@ -295,34 +306,40 @@ public class BatchPercolatorService extends AbstractComponent {
 
     private List<ParsedDocument> parsedDocuments(IndexService documentIndexService,
                                                  BatchPercolateShardRequest request,
-                                                 XContentParser parser) throws IOException {
+                                                 XContentParser parser) throws Throwable  {
         List<ParsedDocument> docs = new ArrayList<>();
 
         parser.nextToken();
         while ((parser.nextToken()) != XContentParser.Token.END_ARRAY) {
             MapperService mapperService = documentIndexService.mapperService();
-            Tuple<DocumentMapper, Boolean> docMapperTuple = mapperService.documentMapperWithAutoCreate(request.documentType());
+            DocumentMapperForType docMapperTuple = mapperService.documentMapperWithAutoCreate(request.documentType());
 
-            BytesStreamOutput bStream = new BytesStreamOutput();
-            XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON, bStream);
+            BytesStreamOutput buffer = new BytesStreamOutput();
+            XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON, buffer);
             builder.copyCurrentStructure(parser);
             builder.close();
-            docs.add(getParsedDocument(documentIndexService, request, docMapperTuple.v1(), bStream));
-            bStream.close();
+            docs.add(getParsedDocument(request, docMapperTuple, buffer));
+            buffer.close();
         }
 
         return docs;
     }
 
-    private ParsedDocument getParsedDocument(IndexService documentIndexService,
-                                             BatchPercolateShardRequest request,
-                                             DocumentMapper docMapper,
-                                             BytesStreamOutput bStream) {
-        ParsedDocument doc = docMapper.parse(bStream.bytes());
-        if (doc.mappingsModified()) {
-            mappingUpdatedAction.updateMappingOnMaster(
-                    request.shardId().getIndex(), docMapper,
-                    documentIndexService.indexUUID()
+    private ParsedDocument getParsedDocument(BatchPercolateShardRequest request,
+                                             DocumentMapperForType documentMapperForType,
+                                             BytesStreamOutput buffer) throws Throwable {
+        DocumentMapper docMapper = documentMapperForType.getDocumentMapper();
+        ParsedDocument doc = docMapper.parse(SourceToParse.source(buffer.bytes()));
+
+        // Very unclear. Got this condition from mapperService.documentMapperWithAutoCreate:
+        // it returns new DocumentMapperForType(mapper, null); in case if mapper was already registered in the internals structures.
+        // in ES 1.7 this method has same semantics and the explicit bool value when mapping was modified actually.
+        Mapping mapping = documentMapperForType.getMapping();
+        if (mapping != null) {
+            mappingUpdatedAction.updateMappingOnMasterAsynchronously(
+                    request.shardId().getIndex(),
+                    request.documentType(),
+                    mapping
             );
         }
         return doc;
@@ -357,7 +374,11 @@ public class BatchPercolatorService extends AbstractComponent {
 
     private void executeSearch(SearchContext context, QueryAndSource queryAndSource) {
         parseHighlighting(context, queryAndSource.getSource());
-        context.parsedQuery(new ParsedQuery(queryAndSource.getQuery(), ImmutableMap.<String, Filter>of()));
+
+        Query q = queryAndSource.getQuery();
+        ParsedQuery query = new ParsedQuery(q, ImmutableMap.<String, Query>of());
+        context.parsedQuery(query);
+
         if (context.from() == -1) {
             context.from(0);
         }
@@ -419,7 +440,7 @@ public class BatchPercolatorService extends AbstractComponent {
             try {
                 sSource = XContentHelper.convertToJson(source, false);
             } catch (Throwable ignore) {}
-            throw new SearchParseException(context, "Failed to parse source [" + sSource + "]", e);
+            throw new SearchParseException(context, "Failed to parse source [" + sSource + "]", null, e);
         } finally {
             if (parser != null) {
                 parser.close();

@@ -18,12 +18,12 @@
  */
 package com.meltwater.elasticsearch.action;
 
+import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.action.ShardOperationFailedException;
-import org.elasticsearch.action.support.broadcast.BroadcastOperationResponse;
+import org.elasticsearch.action.support.broadcast.BroadcastResponse;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
-import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentBuilderString;
@@ -37,7 +37,7 @@ import java.util.List;
 /**
  * Response from a {@link BatchPercolateRequest}
  */
-public class BatchPercolateResponse extends BroadcastOperationResponse implements Streamable, Iterable<BatchPercolateResponseItem>, ToXContent {
+public class BatchPercolateResponse extends BroadcastResponse implements Streamable, Iterable<BatchPercolateResponseItem>, ToXContent {
 
     private List<BatchPercolateResponseItem> results;
     private long tookMs;
@@ -48,15 +48,6 @@ public class BatchPercolateResponse extends BroadcastOperationResponse implement
         super(totalShards, successfulShards, failedShards, shardFailures);
         this.results = results;
         this.tookMs = tookInMillis;
-    }
-
-    /**
-     * How long the percolate took.
-     *
-     * @return the time the request took
-     */
-    public TimeValue getTook() {
-        return new TimeValue(tookMs);
     }
 
     public List<BatchPercolateResponseItem> getResults() {
@@ -89,7 +80,7 @@ public class BatchPercolateResponse extends BroadcastOperationResponse implement
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.field(Fields.TOOK, tookMs);
-        RestActions.buildBroadcastShardsHeader(builder, this);
+        RestActions.buildBroadcastShardsHeader(builder, params, this);
 
         builder.startArray("results");
         for (BatchPercolateResponseItem result : results) {
@@ -102,15 +93,6 @@ public class BatchPercolateResponse extends BroadcastOperationResponse implement
     @Override
     public Iterator<BatchPercolateResponseItem> iterator() {
         return results.iterator();
-    }
-
-    public String getShardFailureErrorMessages() {
-        StringBuilder errorMsg = new StringBuilder();
-        for(ShardOperationFailedException e : getShardFailures()) {
-            errorMsg.append("[").append(e.index()).append("-").append(e.shardId()).append("] ");
-            errorMsg.append(e.reason().replaceAll(";", ";\n")).append("\t");
-        }
-        return errorMsg.toString();
     }
 
     static final class Fields {

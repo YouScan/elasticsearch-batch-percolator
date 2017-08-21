@@ -26,15 +26,15 @@ import com.meltwater.elasticsearch.rest.RestBatchPercolateAction;
 import com.meltwater.elasticsearch.shard.BatchPercolatorQueriesRegistry;
 import org.elasticsearch.action.ActionModule;
 import org.elasticsearch.common.inject.Module;
-import org.elasticsearch.index.CloseableIndexComponent;
-import org.elasticsearch.plugins.AbstractPlugin;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.rest.RestModule;
 
+import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 
-public class BatchPercolatorPlugin extends AbstractPlugin {
+public class BatchPercolatorPlugin extends Plugin {
 
     @Override
     public String name() {
@@ -47,23 +47,22 @@ public class BatchPercolatorPlugin extends AbstractPlugin {
     }
 
     @Override
-    public Collection<Class<? extends Module>> indexModules() {
-        List<Class<? extends Module>> modules = new ArrayList<>(1);
-        modules.add(BatchPercolatorModule.class);
+    public Collection<Module> indexModules(Settings indexSettings) {
+        Collection<Module> modules = new ArrayList<>(1);
+        modules.add(BatchPercolatorModule.INSTANCE);
         return modules;
     }
 
     @Override
-    public Collection<Class<? extends Module>> shardModules() {
-        List<Class<? extends Module>> modules = new ArrayList<>(1);
-        modules.add(BatchPercolatorShardModule.class);
+    public Collection<Module> shardModules(Settings indexSettings) {
+        Collection<Module> modules = new ArrayList<>(1);
+        modules.add(BatchPercolatorShardModule.INSTANCE);
         return modules;
     }
 
-
     @Override
-    public Collection<Class<? extends CloseableIndexComponent>> shardServices() {
-        List<Class<? extends CloseableIndexComponent>> shardServices = new ArrayList<>(1);
+    public Collection<Class<? extends Closeable>> shardServices() {
+        Collection<Class<? extends Closeable>> shardServices = new ArrayList<>(1);
         shardServices.add(BatchPercolatorQueriesRegistry.class);
         return shardServices;
     }

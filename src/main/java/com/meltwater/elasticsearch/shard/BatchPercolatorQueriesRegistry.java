@@ -19,22 +19,22 @@
 
 package com.meltwater.elasticsearch.shard;
 
+import com.google.common.base.Optional;
 import com.meltwater.elasticsearch.index.BatchPercolatorService;
 import com.meltwater.elasticsearch.index.queries.LimitingFilterFactory;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.queries.TermFilter;
-import org.apache.lucene.search.Query;
+import org.apache.lucene.search.*;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.lucene.search.XConstantScoreQuery;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.ConcurrentCollections;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.index.CloseableIndexComponent;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.IndexComponent;
 import org.elasticsearch.index.cache.IndexCache;
 import org.elasticsearch.index.engine.Engine;
 import org.elasticsearch.index.fielddata.IndexFieldDataService;
@@ -52,6 +52,7 @@ import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.indices.IndicesLifecycle;
 
+import java.io.Closeable;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -64,7 +65,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * this registry with queries in real time.
  * </p>
  */
-public class BatchPercolatorQueriesRegistry extends AbstractIndexShardComponent implements CloseableIndexComponent {
+public class BatchPercolatorQueriesRegistry extends AbstractIndexShardComponent implements IndexComponent, Closeable {
 
     // This is a shard level service, but these below are index level service:
     private final IndexQueryParserService queryParserService;
@@ -111,6 +112,11 @@ public class BatchPercolatorQueriesRegistry extends AbstractIndexShardComponent 
         clear();
     }
 
+    @Override
+    public Index index() {
+        return shardId.index();
+    }
+
     public void clear() {
         percolateQueries.clear();
     }
@@ -121,15 +127,9 @@ public class BatchPercolatorQueriesRegistry extends AbstractIndexShardComponent 
         }
     }
 
-    void disableRealTimePercolator() {
-        if (realTimePercolatorEnabled.compareAndSet(true, false)) {
-            indexingService.removeListener(realTimePercolatorOperationListener);
-        }
-    }
-
     public void addPercolateQuery(String idAsString, BytesReference source) {
-        QueryAndSource newquery = parsePercolatorDocument(idAsString, source);
-        percolateQueries.put(idAsString, newquery);
+        QueryAndSource newQuery = parsePercolatorDocument(idAsString, source);
+        percolateQueries.put(idAsString, newQuery);
     }
 
     public void removePercolateQuery(String idAsString) {
@@ -155,7 +155,7 @@ public class BatchPercolatorQueriesRegistry extends AbstractIndexShardComponent 
                     if ("query".equals(currentFieldName)) {
                         if (type != null) {
                             Query query = parseQuery(type, null, parser);
-                            return new QueryAndSource(query, limitingFilterFactory.limitingFilter(query),source);
+                            return new QueryAndSource(query, limitingFilterFactory.limitingFilter(query), source);
                         } else {
                             XContentBuilder builder = XContentFactory.contentBuilder(parser.contentType());
                             builder.copyCurrentStructure(parser);
@@ -174,7 +174,8 @@ public class BatchPercolatorQueriesRegistry extends AbstractIndexShardComponent 
                 }
             }
             Query query = parseQuery(type, querySource, null);
-            return new QueryAndSource(query, limitingFilterFactory.limitingFilter(query), source);
+            Optional<Query> queryOptional = limitingFilterFactory.limitingFilter(query);
+            return new QueryAndSource(query, queryOptional, source);
         } catch (Exception e) {
             throw new BatchPercolatorQueryException(shardId().index(), "failed to parse query [" + id + "]", e);
         } finally {
@@ -213,15 +214,6 @@ public class BatchPercolatorQueriesRegistry extends AbstractIndexShardComponent 
                 enableRealTimePercolator();
             }
         }
-
-        @Override
-        public void afterRemove(DocumentMapper mapper) {
-            if (BatchPercolatorService.TYPE_NAME.equals(mapper.type())) {
-                disableRealTimePercolator();
-                clear();
-            }
-        }
-
     }
 
     private class ShardLifecycleListener extends IndicesLifecycle.Listener {
@@ -254,10 +246,12 @@ public class BatchPercolatorQueriesRegistry extends AbstractIndexShardComponent 
                 shard.refresh("percolator_load_queries");
                 // Maybe add a mode load? This isn't really a write. We need write b/c state=post_recovery
                 try(Engine.Searcher searcher = shard.engine().acquireSearcher("percolator_load_queries")) {
-                    Query query = new XConstantScoreQuery(
-                            indexCache.filter().cache(
-                                    new TermFilter(new Term(TypeFieldMapper.NAME, BatchPercolatorService.TYPE_NAME))
-                            )
+
+                    Query query = new ConstantScoreQuery(
+                            indexCache.query().doCache(
+                                    new QueryWrapperFilter(new TermQuery(new Term(TypeFieldMapper.NAME, BatchPercolatorService.TYPE_NAME))).createWeight(searcher.searcher(), false),
+                                    new UsageTrackingQueryCachingPolicy()
+                            ).getQuery()
                     );
                     BatchQueriesLoaderCollector queryCollector = new BatchQueriesLoaderCollector(BatchPercolatorQueriesRegistry.this, logger, mapperService, indexFieldDataService);
                     searcher.searcher().search(query, queryCollector);

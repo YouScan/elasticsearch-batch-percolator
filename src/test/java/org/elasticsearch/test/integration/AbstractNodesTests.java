@@ -28,7 +28,6 @@ import org.elasticsearch.common.io.FileSystemUtils;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.network.NetworkUtils;
-import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.ToXContent;
@@ -40,14 +39,15 @@ import org.elasticsearch.search.highlight.HighlightBuilder;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import static org.elasticsearch.common.collect.Maps.newHashMap;
-import static org.elasticsearch.common.settings.ImmutableSettings.Builder.EMPTY_SETTINGS;
-import static org.elasticsearch.common.settings.ImmutableSettings.settingsBuilder;
+import static com.google.common.collect.Maps.newHashMap;
+import static org.elasticsearch.common.settings.Settings.Builder.EMPTY_SETTINGS;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.node.NodeBuilder.nodeBuilder;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -63,20 +63,40 @@ public abstract class AbstractNodesTests {
 
     private static Map<String, Client> clients = newHashMap();
 
-    private static Settings defaultSettings = ImmutableSettings
+    private static Settings defaultSettings = Settings
             .settingsBuilder()
             .put("path.data", BASE_DIR)
-            .put("cluster.name", "test-cluster-" + NetworkUtils.getLocalAddress().getHostName())
+            .put("cluster.name", "test-cluster-" + NetworkUtilsLegacy.getLocalAddress().getHostName())
             .put(InternalSettingsPreparer.IGNORE_SYSTEM_PROPERTIES_SETTING, true)
             .put("node.mode", "local")
             .build();
+
+    private static class NetworkUtilsLegacy {
+
+        private static final InetAddress localAddress;
+
+        static {
+            InetAddress localAddressX;
+            try {
+                localAddressX = InetAddress.getLocalHost();
+            } catch (Throwable e) {
+                // logger.warn("failed to resolve local host, fallback to loopback", e);
+                localAddressX = InetAddress.getLoopbackAddress();
+            }
+            localAddress = localAddressX;
+        }
+
+        public static InetAddress getLocalAddress() {
+            return localAddress;
+        }
+    }
 
     public void putDefaultSettings(Settings.Builder settings) {
         putDefaultSettings(settings.build());
     }
 
     public void putDefaultSettings(Settings settings) {
-        defaultSettings = ImmutableSettings.settingsBuilder().put(defaultSettings).put(settings).build();
+        defaultSettings = Settings.settingsBuilder().put(defaultSettings).put(settings).build();
     }
 
     public static Node startNode(String id) {
@@ -101,8 +121,9 @@ public abstract class AbstractNodesTests {
 
     public static Node buildNode(String id, Settings settings) {
         String settingsSource = AbstractNodesTests.class.getName().replace('.', '/') + ".yml";
-        Settings finalSettings = settingsBuilder()
-                .loadFromClasspath(settingsSource)
+        Settings finalSettings = Settings.settingsBuilder()
+                //.loadFromClasspath(settingsSource)
+                .loadFromPath(Paths.get(settingsSource))
                 .put(defaultSettings)
                 .put(settings)
                 .put("name", id)
@@ -110,11 +131,11 @@ public abstract class AbstractNodesTests {
 
         if (finalSettings.get("index.gateway.type") == null) {
             // default to non gateway
-            finalSettings = settingsBuilder().put(finalSettings).put("index.gateway.type", "none").build();
+            finalSettings = Settings.settingsBuilder().put(finalSettings).put("index.gateway.type", "none").build();
         }
         if (finalSettings.get("cluster.routing.schedule") != null) {
             // decrease the routing schedule so new nodes will be added quickly
-            finalSettings = settingsBuilder().put(finalSettings).put("cluster.routing.schedule", "50ms").build();
+            finalSettings = Settings.settingsBuilder().put(finalSettings).put("cluster.routing.schedule", "50ms").build();
         }
 
         Node node = nodeBuilder()
@@ -153,7 +174,58 @@ public abstract class AbstractNodesTests {
             node.close();
         }
         nodes.clear();
-        FileSystemUtils.deleteRecursively(new File(BASE_DIR));
+        //FileSystemUtils.deleteRecursively(new File(BASE_DIR));
+        FileSystemUtilsLegacy.deleteRecursively(new File(BASE_DIR));
+    }
+
+    private static class FileSystemUtilsLegacy{
+
+        /**
+         * Deletes the given files recursively. if <tt>deleteRoots</tt> is set to <code>true</code>
+         * the given root files will be deleted as well. Otherwise only their content is deleted.
+         */
+        public static boolean deleteRecursively(File[] roots, boolean deleteRoots) {
+
+            boolean deleted = true;
+            for (File root : roots) {
+                deleted &= deleteRecursively(root, deleteRoots);
+            }
+            return deleted;
+        }
+
+        /**
+         * Deletes the given files recursively including the given roots.
+         */
+        public static boolean deleteRecursively(File... roots) {
+            return deleteRecursively(roots, true);
+        }
+
+        /**
+         * Delete the supplied {@link java.io.File} - for directories,
+         * recursively delete any nested directories or files as well.
+         *
+         * @param root       the root <code>File</code> to delete
+         * @param deleteRoot whether or not to delete the root itself or just the content of the root.
+         * @return <code>true</code> if the <code>File</code> was deleted,
+         *         otherwise <code>false</code>
+         */
+        public static boolean deleteRecursively(File root, boolean deleteRoot) {
+            if (root != null) {
+                File[] children = root.listFiles();
+                if (children != null) {
+                    for (File aChildren : children) {
+                        deleteRecursively(aChildren, true);
+                    }
+                }
+
+                if (deleteRoot) {
+                    return root.delete();
+                } else {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     public void rollingRestart(){

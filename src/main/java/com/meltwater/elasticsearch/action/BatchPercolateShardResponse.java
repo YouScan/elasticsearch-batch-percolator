@@ -19,8 +19,8 @@
 
 package com.meltwater.elasticsearch.action;
 
-import org.elasticsearch.action.support.broadcast.BroadcastShardOperationResponse;
-import org.elasticsearch.common.collect.Maps;
+import com.google.common.collect.Maps;
+import org.elasticsearch.action.support.broadcast.BroadcastShardResponse;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.index.shard.ShardId;
@@ -30,7 +30,7 @@ import java.util.Map;
 
 /**
  */
-public class BatchPercolateShardResponse extends BroadcastShardOperationResponse {
+public class BatchPercolateShardResponse extends BroadcastShardResponse {
 
     private Map<String, BatchPercolateResponseItem> responseItems;
 

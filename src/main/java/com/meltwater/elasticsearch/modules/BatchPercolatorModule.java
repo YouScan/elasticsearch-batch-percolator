@@ -20,11 +20,16 @@ package com.meltwater.elasticsearch.modules;
 
 import com.meltwater.elasticsearch.index.BatchPercolatorService;
 import org.elasticsearch.common.inject.AbstractModule;
+import org.elasticsearch.common.inject.Module;
 
 /**
  *
  */
 public class BatchPercolatorModule extends AbstractModule {
+
+    public static final BatchPercolatorModule INSTANCE = new BatchPercolatorModule();
+
+    private BatchPercolatorModule() { }
 
     @Override
     protected void configure() {

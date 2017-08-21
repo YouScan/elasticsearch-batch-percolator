@@ -19,11 +19,11 @@
 
 package com.meltwater.elasticsearch.action;
 
+import com.google.common.collect.Lists;
 import org.elasticsearch.ElasticsearchGenerationException;
 import org.elasticsearch.client.Requests;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.collect.Lists;
 import org.elasticsearch.common.xcontent.*;
 import org.elasticsearch.search.builder.SearchSourceBuilderException;
 

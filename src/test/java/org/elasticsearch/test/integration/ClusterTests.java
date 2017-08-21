@@ -5,7 +5,6 @@ import com.meltwater.elasticsearch.action.BatchPercolateResponse;
 import com.meltwater.elasticsearch.action.BatchPercolateSourceBuilder;
 import com.meltwater.elasticsearch.index.BatchPercolatorService;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.search.highlight.HighlightBuilder;
 import org.junit.AfterClass;
@@ -33,7 +32,7 @@ public class ClusterTests extends AbstractNodesTests {
     @Test
     public void usingRemoteTransport() throws IOException {
         //Make sure there is only one shard
-        Settings extraSettings = ImmutableSettings.settingsBuilder()
+        Settings extraSettings = Settings.settingsBuilder()
                 .put("index.number_of_shards", 1)
                 .put("index.number_of_replicas", 0)
                 .build();

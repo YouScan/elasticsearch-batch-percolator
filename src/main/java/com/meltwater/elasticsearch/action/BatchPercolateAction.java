@@ -19,10 +19,10 @@
 
 package com.meltwater.elasticsearch.action;
 
-import org.elasticsearch.action.ClientAction;
-import org.elasticsearch.client.Client;
+import org.elasticsearch.action.Action;
+import org.elasticsearch.client.ElasticsearchClient;
 
-public class BatchPercolateAction extends ClientAction<BatchPercolateRequest, BatchPercolateResponse, BatchPercolateRequestBuilder> {
+public class BatchPercolateAction extends Action<BatchPercolateRequest, BatchPercolateResponse, BatchPercolateRequestBuilder> {
 
     public static final BatchPercolateAction INSTANCE = new BatchPercolateAction();
     public static final String NAME = "batchpercolate";
@@ -37,7 +37,7 @@ public class BatchPercolateAction extends ClientAction<BatchPercolateRequest, Ba
     }
 
     @Override
-    public BatchPercolateRequestBuilder newRequestBuilder(Client client) {
+    public BatchPercolateRequestBuilder newRequestBuilder(ElasticsearchClient client) {
         return new BatchPercolateRequestBuilder(client);
     }
 }

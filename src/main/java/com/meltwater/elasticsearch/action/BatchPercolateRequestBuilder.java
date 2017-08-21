@@ -20,14 +20,14 @@ package com.meltwater.elasticsearch.action;
 
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.broadcast.BroadcastOperationRequestBuilder;
-import org.elasticsearch.client.Client;
+import org.elasticsearch.client.ElasticsearchClient;
 
-public class BatchPercolateRequestBuilder extends BroadcastOperationRequestBuilder<BatchPercolateRequest, BatchPercolateResponse, BatchPercolateRequestBuilder, Client> {
+public class BatchPercolateRequestBuilder extends BroadcastOperationRequestBuilder<BatchPercolateRequest, BatchPercolateResponse, BatchPercolateRequestBuilder> {
 
     private BatchPercolateSourceBuilder sourceBuilder;
 
-    public BatchPercolateRequestBuilder(Client client) {
-        super(client, new BatchPercolateRequest());
+    public BatchPercolateRequestBuilder(ElasticsearchClient client) {
+        super(client, BatchPercolateAction.INSTANCE, new BatchPercolateRequest());
     }
 
     /**
@@ -71,11 +71,10 @@ public class BatchPercolateRequestBuilder extends BroadcastOperationRequestBuild
     }
 
     @Override
-    protected void doExecute(ActionListener<BatchPercolateResponse> listener) {
+    public void execute(ActionListener<BatchPercolateResponse> listener) {
         if (sourceBuilder != null) {
             request.source(sourceBuilder);
         }
         client.execute(BatchPercolateAction.INSTANCE, request, listener);
     }
-
 }

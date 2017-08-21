@@ -18,8 +18,8 @@
  */
 package com.meltwater.elasticsearch.shard;
 
+import com.google.common.collect.Maps;
 import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.common.collect.Maps;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;

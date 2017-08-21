@@ -18,6 +18,7 @@
  */
 package com.meltwater.elasticsearch.action;
 
+import com.google.common.collect.Maps;
 import com.meltwater.elasticsearch.index.BatchPercolateException;
 import com.meltwater.elasticsearch.index.BatchPercolatorService;
 import org.elasticsearch.ElasticsearchException;
@@ -25,15 +26,14 @@ import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.DefaultShardOperationFailedException;
 import org.elasticsearch.action.support.broadcast.BroadcastShardOperationFailedException;
-import org.elasticsearch.action.support.broadcast.TransportBroadcastOperationAction;
+import org.elasticsearch.action.support.broadcast.TransportBroadcastAction;
 import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
+import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.routing.GroupShardsIterator;
 import org.elasticsearch.cluster.routing.ShardRouting;
-import org.elasticsearch.common.collect.Lists;
-import org.elasticsearch.common.collect.Maps;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.threadpool.ThreadPool;
@@ -45,12 +45,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
-import static org.elasticsearch.common.collect.Lists.newArrayList;
+import static com.google.common.collect.Lists.newArrayList;
 
 /**
  *
  */
-public class TransportBatchPercolateAction extends TransportBroadcastOperationAction<BatchPercolateRequest, BatchPercolateResponse, BatchPercolateShardRequest, BatchPercolateShardResponse> {
+public class TransportBatchPercolateAction extends TransportBroadcastAction<BatchPercolateRequest, BatchPercolateResponse, BatchPercolateShardRequest, BatchPercolateShardResponse> {
 
     private final BatchPercolatorService percolatorService;
 
@@ -60,19 +60,22 @@ public class TransportBatchPercolateAction extends TransportBroadcastOperationAc
                                          ClusterService clusterService,
                                          TransportService transportService,
                                          BatchPercolatorService percolatorService,
-                                         ActionFilters actionFilters) {
-        super(settings, BatchPercolateAction.NAME, threadPool, clusterService, transportService, actionFilters);
+                                         ActionFilters actionFilters,
+                                         IndexNameExpressionResolver indexNameExpressionResolver,
+                                         Class<BatchPercolateRequest> request,
+                                         Class<BatchPercolateShardRequest> shardRequest) {
+        super(settings,
+                BatchPercolateAction.NAME,
+                threadPool,
+                clusterService,
+                transportService,
+                actionFilters,
+                indexNameExpressionResolver,
+                request,
+                shardRequest,
+                ThreadPool.Names.PERCOLATE
+        );
         this.percolatorService = percolatorService;
-    }
-
-    @Override
-    protected String executor() {
-        return ThreadPool.Names.PERCOLATE;
-    }
-
-    @Override
-    protected BatchPercolateRequest newRequest() {
-        return new BatchPercolateRequest();
     }
 
     @Override
@@ -134,16 +137,11 @@ public class TransportBatchPercolateAction extends TransportBroadcastOperationAc
                 }
             }
 
-            List<BatchPercolateResponseItem> listItems = Lists.newArrayList(mergedItems.values());
+            List<BatchPercolateResponseItem> listItems = newArrayList(mergedItems.values());
             return new BatchPercolateResponse(
                     listItems, tookInMillis, shardsResponses.length(), successfulShards, failedShards, shardFailures
             );
         }
-    }
-
-    @Override
-    protected BatchPercolateShardRequest newShardRequest() {
-        return new BatchPercolateShardRequest();
     }
 
     @Override
@@ -158,8 +156,8 @@ public class TransportBatchPercolateAction extends TransportBroadcastOperationAc
 
     @Override
     protected GroupShardsIterator shards(ClusterState clusterState, BatchPercolateRequest request, String[] concreteIndices) {
-        Map<String, Set<String>> routingMap = clusterState.metaData().resolveSearchRouting(null, request.indices());
-        return clusterService.operationRouting().searchShards(clusterState, request.indices(), concreteIndices, routingMap, null);
+        Map<String, Set<String>> routingMap = indexNameExpressionResolver.resolveSearchRouting(clusterState, null, request.indices());
+        return clusterService.operationRouting().searchShards(clusterState, concreteIndices, routingMap, null);
     }
 
     @Override

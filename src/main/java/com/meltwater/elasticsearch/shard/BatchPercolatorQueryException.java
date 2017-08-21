@@ -18,19 +18,19 @@
  */
 package com.meltwater.elasticsearch.shard;
 
+import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.index.Index;
-import org.elasticsearch.index.IndexException;
 
 /**
  * Exception during parsing a percolator query.
  */
-public class BatchPercolatorQueryException extends IndexException {
+public class BatchPercolatorQueryException extends ElasticsearchException {
 
     public BatchPercolatorQueryException(Index index, String msg) {
-        super(index, msg);
+        super(msg, index);
     }
 
     public BatchPercolatorQueryException(Index index, String msg, Throwable cause) {
-        super(index, msg, cause);
+        super(msg, cause, index);
     }
 }
