@@ -90,7 +90,7 @@ import static org.elasticsearch.search.SearchService.NO_TIMEOUT;
  * 3. Send back the matches for each documents in a BatchPercolateShardResponse.
  */
 public class BatchPercolatorService extends AbstractComponent {
-    public final static String TYPE_NAME = ".batchpercolator";
+    public final static String TYPE_NAME = "~batchpercolator";
 
     private final IndicesService indicesService;
     private final PageCacheRecycler pageCacheRecycler;
