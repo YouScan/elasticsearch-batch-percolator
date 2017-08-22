@@ -72,7 +72,7 @@ public abstract class AbstractNodesTests {
             .settingsBuilder()
             .put("path.home", BASE_DIR)
             .put("path.data", BASE_DIR)
-            .put("path.plugins", BatchPercolatorPlugin.class.getProtectionDomain().getCodeSource().getLocation().getPath())
+            .put("plugin.types", BatchPercolatorPlugin.class.getCanonicalName())
             .put("cluster.name", "test-cluster-" + NetworkUtilsLegacy.getLocalAddress().getHostName())
             .put(InternalSettingsPreparer.IGNORE_SYSTEM_PROPERTIES_SETTING, true)
             .put("node.mode", "local")
