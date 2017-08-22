@@ -26,6 +26,8 @@ import com.meltwater.elasticsearch.rest.RestBatchPercolateAction;
 import com.meltwater.elasticsearch.shard.BatchPercolatorQueriesRegistry;
 import org.elasticsearch.action.ActionModule;
 import org.elasticsearch.common.inject.Module;
+import org.elasticsearch.common.logging.ESLogger;
+import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.rest.RestModule;
@@ -35,6 +37,14 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 public class BatchPercolatorPlugin extends Plugin {
+
+    private final ESLogger logger;
+    private final Settings settings;
+
+    public BatchPercolatorPlugin(Settings settings) {
+        this.settings = settings;
+        this.logger = Loggers.getLogger("plugin.batchpercolator");
+    }
 
     @Override
     public String name() {
@@ -50,6 +60,7 @@ public class BatchPercolatorPlugin extends Plugin {
     public Collection<Module> indexModules(Settings indexSettings) {
         Collection<Module> modules = new ArrayList<>(1);
         modules.add(BatchPercolatorModule.INSTANCE);
+        logger.debug("indexModules: Registered BatchPercolatorModule.INSTANCE");
         return modules;
     }
 
@@ -57,6 +68,7 @@ public class BatchPercolatorPlugin extends Plugin {
     public Collection<Module> shardModules(Settings indexSettings) {
         Collection<Module> modules = new ArrayList<>(1);
         modules.add(BatchPercolatorShardModule.INSTANCE);
+        logger.debug("shardModules: Registered BatchPercolatorShardModule.INSTANCE");
         return modules;
     }
 
@@ -64,15 +76,19 @@ public class BatchPercolatorPlugin extends Plugin {
     public Collection<Class<? extends Closeable>> shardServices() {
         Collection<Class<? extends Closeable>> shardServices = new ArrayList<>(1);
         shardServices.add(BatchPercolatorQueriesRegistry.class);
+        logger.debug("shardServices: Registered BatchPercolatorQueriesRegistry.class");
         return shardServices;
     }
 
+    /* Invoked on component assembly. */
     public void onModule(ActionModule module) {
         module.registerAction(BatchPercolateAction.INSTANCE, TransportBatchPercolateAction.class);
+        logger.debug("onActionModule: Registered BatchPercolateAction.class");
     }
 
-
+    /* Invoked on component assembly. */
     public void onModule(RestModule module) {
         module.addRestAction(RestBatchPercolateAction.class);
+        logger.debug("onRestModule: Registered RestBatchPercolateAction.class");
     }
 }
