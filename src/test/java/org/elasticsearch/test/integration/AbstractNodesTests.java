@@ -19,6 +19,7 @@
 
 package org.elasticsearch.test.integration;
 
+import com.meltwater.elasticsearch.plugin.BatchPercolatorPlugin;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.client.Client;
@@ -69,8 +70,9 @@ public abstract class AbstractNodesTests {
 
     private static Settings defaultSettings = Settings
             .settingsBuilder()
-            .put("path.home", BASE_DIR) // createTempDir()
+            .put("path.home", BASE_DIR)
             .put("path.data", BASE_DIR)
+            .put("path.plugins", BatchPercolatorPlugin.class.getProtectionDomain().getCodeSource().getLocation().getPath())
             .put("cluster.name", "test-cluster-" + NetworkUtilsLegacy.getLocalAddress().getHostName())
             .put(InternalSettingsPreparer.IGNORE_SYSTEM_PROPERTIES_SETTING, true)
             .put("node.mode", "local")

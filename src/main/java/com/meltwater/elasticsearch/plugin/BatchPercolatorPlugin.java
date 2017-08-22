@@ -38,6 +38,8 @@ import java.util.Collection;
 
 public class BatchPercolatorPlugin extends Plugin {
 
+    public final static String NAME = "elasticsearch-batch-percolator";
+
     private final ESLogger logger;
     private final Settings settings;
 
@@ -48,7 +50,7 @@ public class BatchPercolatorPlugin extends Plugin {
 
     @Override
     public String name() {
-        return "elasticsearch-batch-percolator";
+        return NAME;
     }
 
     @Override
