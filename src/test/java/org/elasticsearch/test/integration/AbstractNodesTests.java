@@ -62,6 +62,7 @@ public abstract class AbstractNodesTests {
 
     public final static String BASE_DIR = "test-temp";
 
+    // Add -Dorg.slf4j.simpleLogger.defaultLogLevel=debug to the run configuration to enable the verbose logging
     protected final ESLogger logger = Loggers.getLogger(getClass());
 
     private static Map<String, Node> nodes = newHashMap();
