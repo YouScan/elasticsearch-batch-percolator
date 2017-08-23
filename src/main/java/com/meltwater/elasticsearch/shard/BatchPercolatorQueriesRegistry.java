@@ -225,6 +225,7 @@ public class BatchPercolatorQueriesRegistry extends AbstractIndexShardComponent 
             }
         }
 
+        @Override
         public void beforeIndexShardPostRecovery(IndexShard indexShard) {
             if (hasPercolatorType(indexShard)) {
                 // percolator index has started, fetch what we can from it and initialize the indices
