@@ -61,9 +61,7 @@ public class TransportBatchPercolateAction extends TransportBroadcastAction<Batc
                                          TransportService transportService,
                                          BatchPercolatorService percolatorService,
                                          ActionFilters actionFilters,
-                                         IndexNameExpressionResolver indexNameExpressionResolver,
-                                         Class<BatchPercolateRequest> request,
-                                         Class<BatchPercolateShardRequest> shardRequest) {
+                                         IndexNameExpressionResolver indexNameExpressionResolver) {
         super(settings,
                 BatchPercolateAction.NAME,
                 threadPool,
@@ -71,8 +69,8 @@ public class TransportBatchPercolateAction extends TransportBroadcastAction<Batc
                 transportService,
                 actionFilters,
                 indexNameExpressionResolver,
-                request,
-                shardRequest,
+                BatchPercolateRequest.class,
+                BatchPercolateShardRequest.class,
                 ThreadPool.Names.PERCOLATE
         );
         this.percolatorService = percolatorService;

@@ -84,13 +84,13 @@ public class BatchPercolatorQueriesRegistry extends AbstractIndexShardComponent 
 
     @Inject
     public BatchPercolatorQueriesRegistry(ShardId shardId, @IndexSettings Settings indexSettings, IndexQueryParserService queryParserService,
-                                          ShardIndexingService indexingService, IndicesLifecycle indicesLifecycle, MapperService mapperService,
+                                          IndexShard indexShard, IndicesLifecycle indicesLifecycle, MapperService mapperService,
                                           IndexCache indexCache, IndexFieldDataService indexFieldDataService) {
         super(shardId, indexSettings);
         this.queryParserService = queryParserService;
         this.mapperService = mapperService;
         this.indicesLifecycle = indicesLifecycle;
-        this.indexingService = indexingService;
+        this.indexingService = indexShard.indexingService();
         this.indexCache = indexCache;
         this.indexFieldDataService = indexFieldDataService;
 
