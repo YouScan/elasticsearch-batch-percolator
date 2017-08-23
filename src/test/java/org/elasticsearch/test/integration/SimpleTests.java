@@ -268,7 +268,7 @@ public class SimpleTests extends AbstractNodesTests {
         waitForYellowStatus(client);
 
         client.prepareIndex("nestedindex", BatchPercolatorService.TYPE_NAME, "Q").setSource(jsonBuilder().startObject()
-                .field("query", QueryBuilders.nestedQuery("employee", QueryBuilders.matchQuery("employee.name", "virginia potts").operator(MatchQueryBuilder.Operator.AND)).scoreMode("avg")).endObject()).get();
+                .field("query", QueryBuilders.nestedQuery("employee", QueryBuilders.matchQuery("employee_name", "virginia potts").operator(MatchQueryBuilder.Operator.AND)).scoreMode("avg")).endObject()).get();
 
         client.admin().indices().prepareRefresh().execute().actionGet();
     }
