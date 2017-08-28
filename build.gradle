@@ -40,7 +40,7 @@ buildscript {
 
 dependencies {
     compile 'org.elasticsearch:elasticsearch:2.0.0'
-    compile 'com.meltwater:meltwater-elasticsearch-queries:2.0.0'
+    // compile 'com.meltwater:meltwater-elasticsearch-queries:2.0.0'
 
     testCompile 'com.jayway.jsonpath:json-path:2.2.0'
     testCompile 'junit:junit:4.12'
