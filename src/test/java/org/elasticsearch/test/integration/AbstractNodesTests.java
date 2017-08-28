@@ -21,31 +21,27 @@ package org.elasticsearch.test.integration;
 
 import com.meltwater.elasticsearch.plugin.BatchPercolatorPlugin;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
-import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.Requests;
-import org.elasticsearch.common.Classes;
+import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.common.Priority;
-import org.elasticsearch.common.io.FileSystemUtils;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
-import org.elasticsearch.common.network.NetworkUtils;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.settings.SettingsException;
-import org.elasticsearch.common.settings.loader.SettingsLoaderFactory;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.node.internal.InternalSettingsPreparer;
+import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.search.highlight.HighlightBuilder;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.InetAddress;
-import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -146,9 +142,11 @@ public abstract class AbstractNodesTests {
             finalSettings = Settings.settingsBuilder().put(finalSettings).put("cluster.routing.schedule", "50ms").build();
         }
 
-        Node node = nodeBuilder()
-                .settings(finalSettings)
-                .build();
+        Collection<Class<? extends Plugin>> classpathPlugins = new ArrayList<>();
+        classpathPlugins.add(BatchPercolatorPlugin.class);
+
+        Node node = new PluginsAwareNode(finalSettings, classpathPlugins);
+
         nodes.put(id, node);
         clients.put(id, node.client());
         return node;

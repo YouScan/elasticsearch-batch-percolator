@@ -46,7 +46,6 @@ import org.elasticsearch.index.mapper.MapperService;
 import org.elasticsearch.index.mapper.internal.TypeFieldMapper;
 import org.elasticsearch.index.query.IndexQueryParserService;
 import org.elasticsearch.index.query.QueryParseContext;
-import org.elasticsearch.index.settings.IndexSettings;
 import org.elasticsearch.index.shard.AbstractIndexShardComponent;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.ShardId;
@@ -83,7 +82,7 @@ public class BatchPercolatorQueriesRegistry extends AbstractIndexShardComponent 
     private final AtomicBoolean realTimePercolatorEnabled = new AtomicBoolean(false);
 
     @Inject
-    public BatchPercolatorQueriesRegistry(ShardId shardId, @IndexSettings Settings indexSettings, IndexQueryParserService queryParserService,
+    public BatchPercolatorQueriesRegistry(ShardId shardId, Settings indexSettings, IndexQueryParserService queryParserService,
                                           IndexShard indexShard, IndicesLifecycle indicesLifecycle, MapperService mapperService,
                                           IndexCache indexCache, IndexFieldDataService indexFieldDataService) {
         super(shardId, indexSettings);

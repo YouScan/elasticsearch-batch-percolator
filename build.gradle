@@ -39,7 +39,7 @@ buildscript {
 // https://bintray.com/meltwater/meltwater-elasticsearch-queries/meltwater-elasticsearch-queries/2.0.0#files/com%2Fmeltwater%2Fmeltwater-elasticsearch-queries%2F2.1.2
 
 dependencies {
-    compile 'org.elasticsearch:elasticsearch:2.0.0'
+    compile 'org.elasticsearch:elasticsearch:2.4.4'
     // compile 'com.meltwater:meltwater-elasticsearch-queries:2.0.0'
 
     testCompile 'com.jayway.jsonpath:json-path:2.2.0'

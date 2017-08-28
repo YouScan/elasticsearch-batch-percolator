@@ -19,7 +19,6 @@
 package com.meltwater.elasticsearch.shard;
 
 import com.google.common.base.Optional;
-import org.apache.lucene.search.Filter;
 import org.apache.lucene.search.Query;
 import org.elasticsearch.common.bytes.BytesReference;
 

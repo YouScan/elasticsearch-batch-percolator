@@ -25,7 +25,7 @@ import org.elasticsearch.client.ElasticsearchClient;
 public class BatchPercolateAction extends Action<BatchPercolateRequest, BatchPercolateResponse, BatchPercolateRequestBuilder> {
 
     public static final BatchPercolateAction INSTANCE = new BatchPercolateAction();
-    public static final String NAME = "batchpercolate";
+    public static final String NAME = "indices:data/read/batchpercolate";
 
     private BatchPercolateAction() {
         super(NAME);
