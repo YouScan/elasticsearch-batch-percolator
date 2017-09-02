@@ -20,6 +20,9 @@ public class YPercolateRequestBuilder extends BroadcastOperationRequestBuilder<Y
 
     private PercolateSourceBuilder sourceBuilder;
 
+    public YPercolateRequestBuilder(ElasticsearchClient client) {
+        super(client, YPercolateAction.INSTANCE, new YPercolateRequest());
+    }
     public YPercolateRequestBuilder(ElasticsearchClient client, YPercolateAction action) {
         super(client, action, new YPercolateRequest());
     }

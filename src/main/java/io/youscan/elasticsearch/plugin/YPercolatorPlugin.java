@@ -3,6 +3,8 @@ package io.youscan.elasticsearch.plugin;
 import com.meltwater.elasticsearch.rest.RestBatchPercolateAction;
 import io.youscan.elasticsearch.action.MultiYPercolateAction;
 import io.youscan.elasticsearch.action.TransportMultiYPercolateAction;
+import io.youscan.elasticsearch.action.TransportYPercolateAction;
+import io.youscan.elasticsearch.action.YPercolateAction;
 import io.youscan.elasticsearch.modules.YPercolatorModule;
 import io.youscan.elasticsearch.modules.YPercolatorShardModule;
 import io.youscan.elasticsearch.rest.RestMultiYPercolateAction;
@@ -68,6 +70,9 @@ public class YPercolatorPlugin extends Plugin {
 
     /* Invoked on component assembly. */
     public void onModule(ActionModule module) {
+        module.registerAction(YPercolateAction.INSTANCE, TransportYPercolateAction.class);
+        logger.debug("ActionModule: Registered YPercolateAction instance");
+
         module.registerAction(MultiYPercolateAction.INSTANCE, TransportMultiYPercolateAction.class);
         logger.debug("ActionModule: Registered MultiYPercolateAction instance");
     }
