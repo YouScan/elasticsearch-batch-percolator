@@ -1,6 +1,7 @@
 package io.youscan.elasticsearch.modules;
 
 import com.meltwater.elasticsearch.shard.BatchPercolatorQueriesRegistry;
+import io.youscan.elasticsearch.shard.YPercolatorQueriesRegistry;
 import org.elasticsearch.common.inject.AbstractModule;
 
 public class YPercolatorShardModule extends AbstractModule {
@@ -11,6 +12,6 @@ public class YPercolatorShardModule extends AbstractModule {
 
     @Override
     protected void configure() {
-        bind(BatchPercolatorQueriesRegistry.class).asEagerSingleton();
+        bind(YPercolatorQueriesRegistry.class).asEagerSingleton();
     }
 }

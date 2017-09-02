@@ -57,7 +57,7 @@ public class RestBatchPercolateAction extends BaseRestHandler {
         percolateRequest.indicesOptions(IndicesOptions.fromRequest(restRequest, percolateRequest.indicesOptions()));
         percolateRequest.indices(Strings.splitStringByCommaToArray(restRequest.param("index")));
         percolateRequest.documentType(restRequest.param("type"));
-        percolateRequest.documentType(percolateRequest.getDocumentType());
+        percolateRequest.documentType(percolateRequest.getDocumentType()); // WTF?
         percolateRequest.source(RestActions.getRestContent(restRequest));
 
         client.execute(BatchPercolateAction.INSTANCE, percolateRequest, new RestToXContentListener<BatchPercolateResponse>(restChannel));
