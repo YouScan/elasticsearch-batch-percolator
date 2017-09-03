@@ -5,12 +5,8 @@ import io.youscan.elasticsearch.index.YPercolatorService;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.UnavailableShardsException;
-import org.elasticsearch.action.get.GetRequest;
-import org.elasticsearch.action.get.MultiGetResponse;
-import org.elasticsearch.action.percolate.MultiPercolateAction;
-import org.elasticsearch.action.percolate.PercolateRequest;
-import org.elasticsearch.action.percolate.PercolateResponse;
-import org.elasticsearch.action.percolate.TransportShardMultiPercolateAction;
+import org.elasticsearch.action.get.*;
+import org.elasticsearch.action.percolate.*;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.DefaultShardOperationFailedException;
 import org.elasticsearch.action.support.HandledTransportAction;
@@ -25,6 +21,7 @@ import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.AtomicArray;
 import org.elasticsearch.index.IndexNotFoundException;
+import org.elasticsearch.index.engine.DocumentMissingException;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
@@ -38,6 +35,7 @@ public class TransportMultiYPercolateAction  extends HandledTransportAction<Mult
     private final ClusterService clusterService;
     private final YPercolatorService percolatorService;
 
+    private final TransportMultiGetAction multiGetAction;
     private final TransportShardMultiYPercolateAction shardMultiPercolateAction;
 
     @Inject
@@ -48,20 +46,21 @@ public class TransportMultiYPercolateAction  extends HandledTransportAction<Mult
             ClusterService clusterService,
             TransportService transportService,
             YPercolatorService percolatorService,
+            TransportMultiGetAction multiGetAction,
             ActionFilters actionFilters,
             IndexNameExpressionResolver indexNameExpressionResolver
     ) {
 
-        super(settings, MultiPercolateAction.NAME, threadPool, transportService, actionFilters, indexNameExpressionResolver, MultiYPercolateRequest.class);
+        super(settings, MultiYPercolateAction.NAME, threadPool, transportService, actionFilters, indexNameExpressionResolver, MultiYPercolateRequest.class);
 
         this.shardMultiPercolateAction = shardMultiPercolateAction;
         this.clusterService = clusterService;
         this.percolatorService = percolatorService;
+        this.multiGetAction = multiGetAction;
     }
 
     @Override
     protected void doExecute(final MultiYPercolateRequest request, final ActionListener<MultiYPercolateResponse> listener) {
-
         final ClusterState clusterState = clusterService.state();
         clusterState.blocks().globalBlockedRaiseException(ClusterBlockLevel.READ);
 
@@ -81,7 +80,43 @@ public class TransportMultiYPercolateAction  extends HandledTransportAction<Mult
         }
 
         if (!existingDocsRequests.isEmpty()) {
-            // Not supported in Y-Percolator
+            final MultiGetRequest multiGetRequest = new MultiGetRequest(request);
+            for (GetRequest getRequest : existingDocsRequests) {
+                multiGetRequest.add(
+                        new MultiGetRequest.Item(getRequest.index(), getRequest.type(), getRequest.id())
+                                .routing(getRequest.routing())
+                );
+            }
+
+            multiGetAction.execute(multiGetRequest, new ActionListener<MultiGetResponse>() {
+
+                @Override
+                public void onResponse(MultiGetResponse multiGetItemResponses) {
+                    for (int i = 0; i < multiGetItemResponses.getResponses().length; i++) {
+                        MultiGetItemResponse itemResponse = multiGetItemResponses.getResponses()[i];
+                        int slot = getRequestSlots.get(i);
+                        if (!itemResponse.isFailed()) {
+                            GetResponse getResponse = itemResponse.getResponse();
+                            if (getResponse.isExists()) {
+                                YPercolateRequest originalRequest = (YPercolateRequest) percolateRequests.get(slot);
+                                percolateRequests.set(slot, new YPercolateRequest(originalRequest, getResponse.getSourceAsBytesRef()));
+                            } else {
+                                logger.trace("mypercolate existing doc, item[{}] doesn't exist", slot);
+                                percolateRequests.set(slot, new DocumentMissingException(null, getResponse.getType(), getResponse.getId()));
+                            }
+                        } else {
+                            logger.trace("mypercolate existing doc, item[{}] failure {}", slot, itemResponse.getFailure());
+                            percolateRequests.set(slot, itemResponse.getFailure());
+                        }
+                    }
+                    new ASyncAction(request, percolateRequests, listener, clusterState).run();
+                }
+
+                @Override
+                public void onFailure(Throwable e) {
+                    listener.onFailure(e);
+                }
+            });
         } else {
             new ASyncAction(request, percolateRequests, listener, clusterState).run();
         }
@@ -169,7 +204,7 @@ public class TransportMultiYPercolateAction  extends HandledTransportAction<Mult
             for (int slot = 0;  slot < percolateRequests.size(); slot++) {
                 Object element = percolateRequests.get(slot);
                 assert element != null;
-                if (element instanceof PercolateRequest) {
+                if (element instanceof YPercolateRequest) {
                     YPercolateRequest percolateRequest = (YPercolateRequest) element;
                     String[] concreteIndices;
                     try {
@@ -181,7 +216,7 @@ public class TransportMultiYPercolateAction  extends HandledTransportAction<Mult
                         continue;
                     }
                     Map<String, Set<String>> routing = indexNameExpressionResolver.resolveSearchRouting(clusterState, percolateRequest.routing(), percolateRequest.indices());
-                    // TODO: I only need shardIds, ShardIterator(ShardRouting) is only needed in TransportShardMultiPercolateAction
+                    // TODO: I only need shardIds, ShardIterator(ShardRouting) is only needed in TransportShardMultiYPercolateAction
                     GroupShardsIterator shards = clusterService.operationRouting().searchShards(
                             clusterState, concreteIndices, routing, percolateRequest.preference()
                     );
@@ -228,7 +263,7 @@ public class TransportMultiYPercolateAction  extends HandledTransportAction<Mult
                 return;
             }
 
-            logger.trace("ypercolate executing for shards {}", requestsByShard.keySet());
+            logger.trace("mypercolate executing for shards {}", requestsByShard.keySet());
             for (Map.Entry<ShardId, TransportShardMultiYPercolateAction.Request> entry : requestsByShard.entrySet()) {
                 final ShardId shardId = entry.getKey();
                 TransportShardMultiYPercolateAction.Request shardRequest = entry.getValue();
@@ -304,7 +339,7 @@ public class TransportMultiYPercolateAction  extends HandledTransportAction<Mult
 
         void reduce(int slot) {
             AtomicReferenceArray shardResponses = responsesByItemAndShard.get(slot);
-            YPercolateResponse reducedResponse = TransportMultiYPercolateAction.reduce((YPercolateRequest) percolateRequests.get(slot), shardResponses, percolatorService);
+            YPercolateResponse reducedResponse = TransportYPercolateAction.reduce((YPercolateRequest) percolateRequests.get(slot), shardResponses, percolatorService);
             reducedResponses.set(slot, reducedResponse);
             assert expectedOperations.get() >= 1 : "slot[" + slot + "] expected options should be >= 1 but is " + expectedOperations.get();
             if (expectedOperations.decrementAndGet() == 0) {
@@ -317,7 +352,7 @@ public class TransportMultiYPercolateAction  extends HandledTransportAction<Mult
             for (int slot = 0; slot < reducedResponses.length(); slot++) {
                 Object element = reducedResponses.get(slot);
                 assert element != null : "Element[" + slot + "] shouldn't be null";
-                if (element instanceof PercolateResponse) {
+                if (element instanceof YPercolateResponse) {
                     finalResponse[slot] = new MultiYPercolateResponse.Item((YPercolateResponse) element);
                 } else if (element instanceof Throwable) {
                     finalResponse[slot] = new MultiYPercolateResponse.Item((Throwable)element);
@@ -329,4 +364,5 @@ public class TransportMultiYPercolateAction  extends HandledTransportAction<Mult
         }
 
     }
+
 }

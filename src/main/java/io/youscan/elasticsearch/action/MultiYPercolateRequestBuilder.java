@@ -6,9 +6,14 @@ import org.elasticsearch.client.ElasticsearchClient;
 
 public class MultiYPercolateRequestBuilder extends ActionRequestBuilder<MultiYPercolateRequest, MultiYPercolateResponse, MultiYPercolateRequestBuilder> {
 
+    public MultiYPercolateRequestBuilder(ElasticsearchClient client) {
+        super(client, MultiYPercolateAction.INSTANCE, new MultiYPercolateRequest());
+    }
+
     public MultiYPercolateRequestBuilder(ElasticsearchClient client, MultiYPercolateAction action) {
         super(client, action, new MultiYPercolateRequest());
     }
+
     public MultiYPercolateRequestBuilder add(YPercolateRequest percolateRequest) {
         request.add(percolateRequest);
         return this;
