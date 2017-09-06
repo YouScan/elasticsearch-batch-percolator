@@ -35,12 +35,8 @@ buildscript {
     }
 }
 
-// https://search.maven.org/#artifactdetails%7Corg.elasticsearch%7Celasticsearch%7C2.0.0%7Cjar
-// https://bintray.com/meltwater/meltwater-elasticsearch-queries/meltwater-elasticsearch-queries/2.0.0#files/com%2Fmeltwater%2Fmeltwater-elasticsearch-queries%2F2.1.2
-
 dependencies {
     compile 'org.elasticsearch:elasticsearch:2.4.4'
-    // compile 'com.meltwater:meltwater-elasticsearch-queries:2.0.0'
 
     testCompile 'com.jayway.jsonpath:json-path:2.2.0'
     testCompile 'junit:junit:4.12'
