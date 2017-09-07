@@ -5,7 +5,6 @@ import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.Response;
 import io.youscan.elasticsearch.index.YPercolatorService;
 import io.youscan.elasticsearch.plugin.YPercolatorPlugin;
-import org.apache.lucene.analysis.th.ThaiWordFilter;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.xcontent.json.JsonXContent;
@@ -99,13 +98,20 @@ public class APITests extends AbstractNodesTests {
                         .endObject()))
                 .toXContent(JsonXContent.contentBuilder(), EMPTY_PARAMS).bytes();
 
+        // String body = source.toUtf8();
+        String body = "{ \"doc\": { \"field1\": \"the fox is here\", \"field2\": \"meltwater percolator\" } }";
+
+        logger.info("--> Request body:\n" + body);
+
         Response restResponse = asyncHttpClient.preparePost("http://localhost:9200/"+indexWithPercolator+"/"+docForPercolateType+"/_ypercolate")
                 .setHeader("Content-type", "application/json")
-                .setBody(source.toUtf8())
+                .setBody(body)
                 .execute()
                 .get();
 
         String responseBody = restResponse.getResponseBody();
+
+        logger.info("--> Response body:\n" + responseBody);
 
         assertThat(restResponse.getStatusCode(), equalTo(200));
 
@@ -181,13 +187,21 @@ public class APITests extends AbstractNodesTests {
                         .endObject()))
                 .toXContent(JsonXContent.contentBuilder(), EMPTY_PARAMS).bytes();
 
-        Response restResponse = asyncHttpClient.preparePost("http://localhost:9200/"+indexWithPercolator+"/"+docForPercolateType+"/_mypercolate")
-                .setHeader("Content-type", "application/json")
-                .setBody(source.toUtf8())
-                .execute()
-                .get();
+        // String body = source.toUtf8();
+        String body = "{ \"percolate\": { \"index\":\""+ indexWithPercolator +"\", \"type\":\"" + docForPercolateType + "\" } }\n" +
+                "{ \"doc\": { \"field1\": \"the fox is here\", \"field2\": \"Youscan\" } }\n";
+
+        logger.info("--> Request body:\n" + body);
+
+        Response restResponse = asyncHttpClient.preparePost("http://localhost:9200/"+indexWithPercolator+"/"+docForPercolateType+"/_mypercolate?pretty=true")
+            .setHeader("Content-type", "application/json")
+            .setBody(body)
+            .execute()
+            .get();
 
         String responseBody = restResponse.getResponseBody();
+
+        logger.info("--> Response body:\n" + responseBody);
 
         assertThat(restResponse.getStatusCode(), equalTo(200));
 
