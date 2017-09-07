@@ -54,6 +54,10 @@ task pluginZipFile(type: Zip){
         it.getName().startsWith('meltwater-elasticsearch-queries')
     })
     from(project.jar)
+    from("src/main/resources"){
+        include("plugin-descriptor.properties")
+        filter{ it.replaceAll('@plugin.version@', project.version) }
+    }
 }
 
 build.dependsOn pluginZipFile
@@ -71,7 +75,6 @@ task sourceJar(type: Jar) {
 processResources {
     filesMatching('*.properties') {
         filter ReplaceTokens, tokens: [ 'plugin.version': project.version ]
-
     }
 }
 

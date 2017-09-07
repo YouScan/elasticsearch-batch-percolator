@@ -1,6 +1,9 @@
 package io.youscan.elasticsearch.index;
 
-import io.youscan.elasticsearch.action.*;
+import io.youscan.elasticsearch.action.YPercolateRequest;
+import io.youscan.elasticsearch.action.YPercolateResponse;
+import io.youscan.elasticsearch.action.YPercolateShardRequest;
+import io.youscan.elasticsearch.action.YPercolateShardResponse;
 import org.elasticsearch.cache.recycler.PageCacheRecycler;
 import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.action.index.MappingUpdatedAction;
@@ -11,13 +14,11 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.indices.IndicesService;
-import org.elasticsearch.percolator.PercolatorService;
 import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.aggregations.InternalAggregations;
 import org.elasticsearch.search.fetch.FetchPhase;
 import org.elasticsearch.search.highlight.HighlightPhase;
 import org.elasticsearch.search.query.QueryPhase;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.io.IOException;
 import java.util.List;
@@ -74,12 +75,12 @@ public class YPercolatorService extends AbstractComponent {
 
     public YPercolatorService.ReduceResult reduce(byte percolatorTypeId, List<YPercolateShardResponse> shardResults, YPercolateRequest request) {
         // TODO Remove reduce phase from the pipeline
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("Not implemented yet");
     }
 
     public YPercolateShardResponse percolate(YPercolateShardRequest request)  throws IOException {
         // TODO make it like public BatchPercolateShardResponse percolate(BatchPercolateShardRequest request) throws IOException
-        throw new NotImplementedException();
+        throw new UnsupportedOperationException("Not implemented yet");
     }
 
     public final static class ReduceResult {
