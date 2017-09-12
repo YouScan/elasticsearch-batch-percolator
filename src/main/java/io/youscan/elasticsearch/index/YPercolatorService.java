@@ -421,6 +421,13 @@ public class YPercolatorService extends AbstractComponent {
 
         for (Map.Entry<String, QueryAndSource> entry : percolateQueries.entrySet()) {
             try{
+                // Some queries (function_score query when for decay functions) rely on a SearchContext being set:
+                // We switch types because this context needs to be in the context of the percolate queries in the shard and
+                // not the in memory percolate doc
+                // String[] previousTypes = context.types();
+                // context.types(new String[]{TYPE_NAME});
+                SearchContext.setCurrent(context);
+
                 executeSearch(context, entry.getValue());
                 for (SearchHit searchHit  : context.fetchResult().hits()) {
                     String id = searchHit.getId();
@@ -434,8 +441,11 @@ public class YPercolatorService extends AbstractComponent {
             }
             catch (Exception e){
                 logger.warn(
-                        "Failed to execute query. Will not add it to matches. Query ID: {}, Query: {}: {}",
-                        e, entry.getKey(), entry.getValue().getQuery(), e.getMessage());
+                        "Failed to execute query. Will not add it to matches. Query ID: {}, Query: {}: {} / '{}'",
+                        e, entry.getKey(), entry.getValue().getQuery(), e.toString(), e.getMessage());
+            }
+            finally{
+                SearchContext.removeCurrent();
             }
         }
 
