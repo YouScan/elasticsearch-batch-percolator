@@ -72,6 +72,4 @@ public class BatchPercolateShardResponse extends BroadcastShardResponse {
             entry.getValue().writeTo(out);
         }
     }
-
-
 }

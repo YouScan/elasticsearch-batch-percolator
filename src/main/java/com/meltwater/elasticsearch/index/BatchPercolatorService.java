@@ -163,8 +163,7 @@ public class BatchPercolatorService extends AbstractComponent {
                 System.currentTimeMillis() - filteringStart
         );
         //Perform the actual matching
-        Map<String, BatchPercolateResponseItem> responses = percolateResponses(
-                context, filteredQueries, parsedDocuments);
+        Map<String, BatchPercolateResponseItem> responses = percolateResponses(context, filteredQueries, parsedDocuments);
 
         directory.close();
         context.close();

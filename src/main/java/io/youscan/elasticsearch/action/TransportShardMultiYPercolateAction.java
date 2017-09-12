@@ -7,6 +7,7 @@ import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.action.IndicesRequest;
 import org.elasticsearch.action.OriginalIndices;
+import org.elasticsearch.action.percolate.TransportShardMultiPercolateAction;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.TransportActions;
 import org.elasticsearch.action.support.single.shard.SingleShardRequest;
@@ -15,6 +16,7 @@ import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.routing.ShardIterator;
+import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -84,23 +86,45 @@ public class TransportShardMultiYPercolateAction  extends TransportSingleShardAc
     @Override
     protected TransportShardMultiYPercolateAction.Response shardOperation(TransportShardMultiYPercolateAction.Request request, ShardId shardId) {
 
+        ArrayList<Tuple<Integer, YPercolateShardRequest>> requests = new ArrayList<>(1);
+        for (TransportShardMultiYPercolateAction.Request.Item item : request.items) {
+            requests.add(Tuple.tuple(item.slot(), item.request()));
+        }
+
         TransportShardMultiYPercolateAction.Response response = new TransportShardMultiYPercolateAction.Response();
         response.items = new ArrayList<>(request.items.size());
-        for (TransportShardMultiYPercolateAction.Request.Item item : request.items) {
-            TransportShardMultiYPercolateAction.Response.Item responseItem;
-            int slot = item.slot;
-            try {
-                responseItem = new TransportShardMultiYPercolateAction.Response.Item(slot, percolatorService.percolate(item.request));
-            } catch (Throwable t) {
-                if (TransportActions.isShardNotAvailableException(t)) {
-                    throw (ElasticsearchException) t;
-                } else {
-                    logger.debug("{} failed to multi percolate", t, request.shardId());
-                    responseItem = new TransportShardMultiYPercolateAction.Response.Item(slot, t);
-                }
+
+        Iterable<YPercolatorService.PercolateResult> responses = null;
+        Throwable error = null;
+
+        try {
+            responses = percolatorService.percolate(requests, shardId);
+        } catch (Throwable e) {
+            if (TransportActions.isShardNotAvailableException(e)) {
+                throw (ElasticsearchException) e;
+            } else{
+                logger.debug("{} failed to multi percolate", e, request.shardId());
+                error = e;
             }
-            response.items.add(responseItem);
         }
+
+        if (error != null){
+            for (Request.Item item : request.items) {
+                Response.Item responseItem = new Response.Item(item.slot, error);
+                response.items.add(responseItem);
+            }
+        } else{
+            Response.Item responseItem;
+            for (YPercolatorService.PercolateResult x: responses){
+                if(x.isError()){
+                    responseItem = new Response.Item(x.getSlot(), x.getError());
+                } else{
+                    responseItem = new Response.Item(x.getSlot(), x.getResponse());
+                }
+                response.items.add(responseItem);
+            }
+        }
+
         return response;
     }
 

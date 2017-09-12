@@ -6,6 +6,7 @@ import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.get.TransportGetAction;
+import org.elasticsearch.action.percolate.PercolateRequest;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.DefaultShardOperationFailedException;
 import org.elasticsearch.action.support.broadcast.BroadcastShardOperationFailedException;
@@ -18,6 +19,7 @@ import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.routing.GroupShardsIterator;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.common.bytes.BytesReference;
+import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.engine.DocumentMissingException;
@@ -172,7 +174,17 @@ public class TransportYPercolateAction extends TransportBroadcastAction<YPercola
     @Override
     protected YPercolateShardResponse shardOperation(YPercolateShardRequest request) {
         try {
-            return percolatorService.percolate(request);
+            ArrayList<Tuple<Integer, YPercolateShardRequest>> requests = new ArrayList<>(1);
+            requests.add(Tuple.tuple(0, request));
+            Iterable<YPercolatorService.PercolateResult> responses = percolatorService.percolate(requests, request.shardId());
+
+            // There is a single response. Either failed or not.
+            YPercolatorService.PercolateResult r = responses.iterator().next();
+            if(r.isError()){
+                throw r.getError();
+            } else {
+                return r.getResponse();
+            }
         } catch (Throwable e) {
             logger.trace("{} failed to percolate", e, request.shardId());
             throw new PercolateException(request.shardId(), "failed to percolate", e);
