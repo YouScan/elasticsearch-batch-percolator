@@ -103,7 +103,7 @@ public class APITests extends AbstractNodesTests {
 
         logger.info("--> Request body:\n" + body);
 
-        Response restResponse = asyncHttpClient.preparePost("http://localhost:9200/"+indexWithPercolator+"/"+docForPercolateType+"/_ypercolate")
+        Response restResponse = asyncHttpClient.preparePost("http://localhost:9200/"+indexWithPercolator+"/"+docForPercolateType+"/_ypercolate?pretty=true")
                 .setHeader("Content-type", "application/json")
                 .setBody(body)
                 .execute()

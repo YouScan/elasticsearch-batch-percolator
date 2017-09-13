@@ -199,21 +199,27 @@ public class YPercolatorService extends AbstractComponent {
                     System.currentTimeMillis() - filteringStart
             );
 
-            Map<Integer, YPercolateResponseItem> responses = percolateResponses(searchContext, filteredQueries, parsedDocuments);
-            List<PercolateResult> result = new ArrayList<>();
+            Tuple<Map<Integer, YPercolateResponseItem>, Throwable> percolateResponsesResult = percolateResponses(searchContext, filteredQueries, parsedDocuments);
+            Map<Integer, YPercolateResponseItem> responses = percolateResponsesResult.v1();
+            List<PercolateResult> result = Lists.newArrayList();
 
             for (Tuple<Integer, YPercolateShardRequest> request: requests){
                 int slot = request.v1();
-                YPercolateResponseItem item;
 
-                if(nonParsedDocs.contains(slot)){
-                    item = new YPercolateResponseItem("_parse_error_");
+                if(percolateResponsesResult.v2() == null){
+
+                    YPercolateResponseItem item;
+
+                    if(nonParsedDocs.contains(slot)){
+                        item = new YPercolateResponseItem("_parse_error_");
+                    } else {
+                        item = responses.get(slot);
+                    }
+
+                    result.add(new PercolateResult(slot, new YPercolateShardResponse(item, shardId.getIndex(), shardId.id(), percolatorTypeId)));
                 } else {
-                    item = responses.get(slot);
+                    result.add(new PercolateResult(slot, percolateResponsesResult.v2()));
                 }
-
-                PercolateResult percolateResult = new PercolateResult(slot, new YPercolateShardResponse(item, shardId.getIndex(), shardId.id(), percolatorTypeId));
-                result.add(percolateResult);
             }
 
             return result;
@@ -413,7 +419,7 @@ public class YPercolatorService extends AbstractComponent {
         return result;
     }
 
-    private Map<Integer, YPercolateResponseItem> percolateResponses(SearchContext context, Map<String, QueryAndSource> percolateQueries, List<Tuple<Integer, ParsedDocument>> parsedDocuments) {
+    private Tuple<Map<Integer, YPercolateResponseItem>, Throwable> percolateResponses(SearchContext context, Map<String, QueryAndSource> percolateQueries, List<Tuple<Integer, ParsedDocument>> parsedDocuments) {
 
         Map<String, Integer> slotIds = Maps.newHashMap();
         Map<Integer, YPercolateResponseItem> responses = Maps.newHashMap();
@@ -445,17 +451,18 @@ public class YPercolatorService extends AbstractComponent {
                     batchPercolateResponseItem.getMatches().put(queryMatch.getQueryId(), queryMatch);
                 }
             }
-            catch (Exception e){
+            catch (Throwable e){
                 logger.warn(
                         "Failed to execute query. Will not add it to matches. Query ID: {}, Query: {}: {} / '{}'",
                         e, entry.getKey(), entry.getValue().getQuery(), e.toString(), e.getMessage());
+                return Tuple.tuple(responses, e);
             }
             finally{
                 SearchContext.removeCurrent();
             }
         }
 
-        return responses;
+        return Tuple.tuple(responses, null);
     }
 
     private QueryMatch getQueryMatch(Map.Entry<String, QueryAndSource> entry, SearchHit searchHit) {
