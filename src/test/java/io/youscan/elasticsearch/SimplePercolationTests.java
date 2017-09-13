@@ -1,9 +1,6 @@
 package io.youscan.elasticsearch;
 
-import io.youscan.elasticsearch.action.MultiYPercolateRequestBuilder;
-import io.youscan.elasticsearch.action.MultiYPercolateResponse;
-import io.youscan.elasticsearch.action.YPercolateRequestBuilder;
-import io.youscan.elasticsearch.action.YPercolateResponse;
+import io.youscan.elasticsearch.action.*;
 import io.youscan.elasticsearch.index.YPercolatorService;
 import io.youscan.elasticsearch.plugin.YPercolatorPlugin;
 import org.elasticsearch.action.percolate.PercolateSourceBuilder;
@@ -98,13 +95,15 @@ public class SimplePercolationTests extends AbstractNodesTests {
                 )
                 .execute().actionGet();
 
-        assertThat(response.getMatches().length, is(2));
+        assertThat(response.getResults().size(), is(1));
+        assertThat(response.getResults().get(0).getMatches().size(), is(2));
 
         ArrayList<String> keys = new ArrayList<>();
-        for (YPercolateResponse.Match item: response.getMatches()){
-            keys.add(item.getId().string());
-
-            assertThat(item.getHighlightFields().size(), is(0));
+        for (YPercolateResponseItem item: response.getResults()){
+//            for (match: item.getMatches())
+//            keys.add(item.getId().string());
+//
+//            assertThat(item.getHighlightFields().size(), is(0));
         }
 
         assertThat(keys, hasItems("1", "4"));

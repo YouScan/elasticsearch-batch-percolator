@@ -3,12 +3,9 @@ package io.youscan.elasticsearch.action;
 import com.carrotsearch.hppc.IntArrayList;
 import io.youscan.elasticsearch.index.YPercolatorService;
 import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.UnavailableShardsException;
 import org.elasticsearch.action.get.*;
-import org.elasticsearch.action.percolate.*;
 import org.elasticsearch.action.support.ActionFilters;
-import org.elasticsearch.action.support.DefaultShardOperationFailedException;
 import org.elasticsearch.action.support.HandledTransportAction;
 import org.elasticsearch.action.support.broadcast.BroadcastShardOperationFailedException;
 import org.elasticsearch.cluster.ClusterService;
@@ -119,59 +116,6 @@ public class TransportMultiYPercolateAction  extends HandledTransportAction<Mult
             });
         } else {
             new ASyncAction(request, percolateRequests, listener, clusterState).run();
-        }
-    }
-
-    public static YPercolateResponse reduce(YPercolateRequest request, AtomicReferenceArray shardsResponses, YPercolatorService percolatorService) {
-        int successfulShards = 0;
-        int failedShards = 0;
-
-        List<YPercolateShardResponse> shardResults = null;
-        List<ShardOperationFailedException> shardFailures = null;
-
-        byte percolatorTypeId = 0x00;
-        for (int i = 0; i < shardsResponses.length(); i++) {
-            Object shardResponse = shardsResponses.get(i);
-            if (shardResponse == null) {
-                // simply ignore non active shards
-            } else if (shardResponse instanceof BroadcastShardOperationFailedException) {
-                failedShards++;
-                if (shardFailures == null) {
-                    shardFailures = new ArrayList<>();
-                }
-                shardFailures.add(new DefaultShardOperationFailedException((BroadcastShardOperationFailedException) shardResponse));
-            } else {
-                YPercolateShardResponse percolateShardResponse = (YPercolateShardResponse) shardResponse;
-                successfulShards++;
-                if (!percolateShardResponse.isEmpty()) {
-                    if (shardResults == null) {
-                        percolatorTypeId = percolateShardResponse.percolatorTypeId();
-                        shardResults = new ArrayList<>();
-                    }
-                    shardResults.add(percolateShardResponse);
-                }
-            }
-        }
-
-        if (shardResults == null) {
-            long tookInMillis = Math.max(1, System.currentTimeMillis() - request.startTime);
-            YPercolateResponse.Match[] matches = request.onlyCount() ? null : YPercolateResponse.EMPTY;
-            return new YPercolateResponse(shardsResponses.length(), successfulShards, failedShards, shardFailures, tookInMillis, matches);
-        } else {
-
-            YPercolatorService.ReduceResult result = percolatorService.reduce(percolatorTypeId, shardResults, request);
-
-            long tookInMillis =  Math.max(1, System.currentTimeMillis() - request.startTime);
-            return new YPercolateResponse(
-                    shardsResponses.length(),
-                    successfulShards,
-                    failedShards,
-                    shardFailures,
-                    result.matches(),
-                    result.count(),
-                    tookInMillis,
-                    result.reducedAggregations()
-            );
         }
     }
 
@@ -339,7 +283,7 @@ public class TransportMultiYPercolateAction  extends HandledTransportAction<Mult
 
         void reduce(int slot) {
             AtomicReferenceArray shardResponses = responsesByItemAndShard.get(slot);
-            YPercolateResponse reducedResponse = TransportYPercolateAction.reduce((YPercolateRequest) percolateRequests.get(slot), shardResponses, percolatorService);
+            YPercolateResponse reducedResponse = percolatorService.reduce((YPercolateRequest) percolateRequests.get(slot), shardResponses);
             reducedResponses.set(slot, reducedResponse);
             assert expectedOperations.get() >= 1 : "slot[" + slot + "] expected options should be >= 1 but is " + expectedOperations.get();
             if (expectedOperations.decrementAndGet() == 0) {

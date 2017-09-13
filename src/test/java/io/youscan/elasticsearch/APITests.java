@@ -188,8 +188,11 @@ public class APITests extends AbstractNodesTests {
                 .toXContent(JsonXContent.contentBuilder(), EMPTY_PARAMS).bytes();
 
         // String body = source.toUtf8();
-        String body = "{ \"percolate\": { \"index\":\""+ indexWithPercolator +"\", \"type\":\"" + docForPercolateType + "\" } }\n" +
-                "{ \"doc\": { \"field1\": \"the fox is here\", \"field2\": \"Youscan\" } }\n";
+        String body =
+                "{ \"percolate\": { \"index\":\""+ indexWithPercolator +"\", \"type\":\"" + docForPercolateType + "\" } }\n" +
+                "{ \"doc\": { \"field1\": \"the fox is here\", \"field2\": \"Youscan\" } }\n" +
+                "{ \"percolate\": { \"index\":\""+ indexWithPercolator +"\", \"type\":\"" + docForPercolateType + "\" } }\n" +
+                "{ \"doc\": { \"field1\": \"bad wolf\", \"field2\": \"percolator\" } }\n";
 
         logger.info("--> Request body:\n" + body);
 

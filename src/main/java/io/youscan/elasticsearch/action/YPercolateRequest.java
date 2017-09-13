@@ -38,7 +38,7 @@ public class YPercolateRequest extends BroadcastRequest<YPercolateRequest> imple
 
     // Used internally in order to compute tookInMillis, TransportBroadcastAction itself doesn't allow
     // to hold it temporarily in an easy way
-    long startTime;
+    public long startTime;
 
     public YPercolateRequest() {
     }

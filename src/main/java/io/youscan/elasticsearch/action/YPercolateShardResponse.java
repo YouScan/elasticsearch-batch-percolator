@@ -2,6 +2,7 @@ package io.youscan.elasticsearch.action;
 
 import com.google.common.collect.Maps;
 import com.meltwater.elasticsearch.action.BatchPercolateResponseItem;
+import io.youscan.elasticsearch.index.YPercolateContext;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.action.support.broadcast.BroadcastShardResponse;
 import org.elasticsearch.common.bytes.BytesReference;
@@ -22,16 +23,19 @@ import java.util.*;
 
 public class YPercolateShardResponse extends BroadcastShardResponse {
 
-    YPercolateResponseItem item;
+    private int requestedSize;
     private byte percolatorTypeId;
+
+    YPercolateResponseItem item;
 
     public YPercolateShardResponse(){
 
     }
-    public YPercolateShardResponse(YPercolateResponseItem item, String index, int shardId, byte percolatorTypeId) {
+    public YPercolateShardResponse(YPercolateResponseItem item, String index, int shardId, YPercolateContext context) {
         super(new ShardId(index, shardId));
         this.item = item;
-        this.percolatorTypeId = percolatorTypeId;
+        this.percolatorTypeId = context.percolatorTypeId;
+        this.requestedSize = context.size();
     }
 
     public YPercolateResponseItem getItem() {
@@ -58,5 +62,9 @@ public class YPercolateShardResponse extends BroadcastShardResponse {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         item.writeTo(out);
+    }
+
+    public int requestedSize() {
+        return this.requestedSize;
     }
 }

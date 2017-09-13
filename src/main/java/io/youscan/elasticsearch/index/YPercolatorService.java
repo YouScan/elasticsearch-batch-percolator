@@ -9,7 +9,6 @@ import io.youscan.elasticsearch.action.*;
 import io.youscan.elasticsearch.shard.QueryAndSource;
 import io.youscan.elasticsearch.shard.QueryMatch;
 import io.youscan.elasticsearch.shard.YPercolatorQueriesRegistry;
-import org.apache.lucene.document.Field;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
@@ -18,7 +17,10 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Counter;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ElasticsearchParseException;
+import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.search.SearchType;
+import org.elasticsearch.action.support.DefaultShardOperationFailedException;
+import org.elasticsearch.action.support.broadcast.BroadcastShardOperationFailedException;
 import org.elasticsearch.cache.recycler.PageCacheRecycler;
 import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.action.index.MappingUpdatedAction;
@@ -35,8 +37,10 @@ import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.xcontent.*;
 import org.elasticsearch.index.IndexService;
 import org.elasticsearch.index.engine.Engine;
-import org.elasticsearch.index.mapper.*;
-import org.elasticsearch.index.mapper.internal.UidFieldMapper;
+import org.elasticsearch.index.mapper.DocumentMapperForType;
+import org.elasticsearch.index.mapper.MapperService;
+import org.elasticsearch.index.mapper.ParsedDocument;
+import org.elasticsearch.index.mapper.SourceToParse;
 import org.elasticsearch.index.query.ParsedQuery;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.ShardId;
@@ -47,7 +51,6 @@ import org.elasticsearch.search.SearchParseElement;
 import org.elasticsearch.search.SearchParseException;
 import org.elasticsearch.search.SearchShardTarget;
 import org.elasticsearch.search.aggregations.AggregationPhase;
-import org.elasticsearch.search.aggregations.InternalAggregations;
 import org.elasticsearch.search.fetch.FetchPhase;
 import org.elasticsearch.search.highlight.HighlightPhase;
 import org.elasticsearch.search.internal.DefaultSearchContext;
@@ -62,7 +65,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
+import static com.google.common.collect.Lists.newArrayList;
 import static org.elasticsearch.index.mapper.SourceToParse.source;
 import static org.elasticsearch.search.SearchService.DEFAULT_SEARCH_TIMEOUT;
 import static org.elasticsearch.search.SearchService.NO_TIMEOUT;
@@ -164,7 +169,7 @@ public class YPercolatorService extends AbstractComponent {
             if (percolateQueries.isEmpty()) {
                 List<PercolateResult> result = new ArrayList<>(requests.size());
                 for(Tuple<Integer, YPercolateShardRequest> request: requests){
-                    YPercolateShardResponse response = new YPercolateShardResponse(null, shardId.getIndex(), shardId.id(), percolatorTypeId);
+                    YPercolateShardResponse response = new YPercolateShardResponse(null, shardId.getIndex(), shardId.id(), percolateContexts.get(request.v1()));
                     PercolateResult resultItem = new PercolateResult(request.v1(), response);
                     result.add(resultItem);
                 }
@@ -216,7 +221,7 @@ public class YPercolatorService extends AbstractComponent {
                         item = responses.get(slot);
                     }
 
-                    result.add(new PercolateResult(slot, new YPercolateShardResponse(item, shardId.getIndex(), shardId.id(), percolatorTypeId)));
+                    result.add(new PercolateResult(slot, new YPercolateShardResponse(item, shardId.getIndex(), shardId.id(), percolateContexts.get(slot))));
                 } else {
                     result.add(new PercolateResult(slot, percolateResponsesResult.v2()));
                 }
@@ -666,41 +671,51 @@ public class YPercolatorService extends AbstractComponent {
         }
     }
 
-    // ----------------------------------------------------------------------------------------------------------------
+    // See TransportBatchPercolateAction#mergeResults(BatchPercolateRequest request, AtomicReferenceArray shardsResponses) {
+    public YPercolateResponse reduce(YPercolateRequest request, AtomicReferenceArray shardsResponses) {
+        int successfulShards = 0;
+        int failedShards = 0;
 
-    public YPercolatorService.ReduceResult reduce(byte percolatorTypeId, List<YPercolateShardResponse> shardResults, YPercolateRequest request) {
-        // TODO Remove reduce phase from the pipeline. Or just leave this exception
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
+        List<YPercolateShardResponse> shardResults = newArrayList();
+        List<ShardOperationFailedException> shardFailures = null;
 
-    public final static class ReduceResult {
-
-        private final long count;
-        private final YPercolateResponse.Match[] matches;
-        private final InternalAggregations reducedAggregations;
-
-        ReduceResult(long count, YPercolateResponse.Match[] matches, InternalAggregations reducedAggregations) {
-            this.count = count;
-            this.matches = matches;
-            this.reducedAggregations = reducedAggregations;
+        for (int i = 0; i < shardsResponses.length(); i++) {
+            Object shardResponse = shardsResponses.get(i);
+            if (shardResponse == null) {
+                // simply ignore non active shards
+            } else if (shardResponse instanceof BroadcastShardOperationFailedException) {
+                failedShards++;
+                if (shardFailures == null) {
+                    shardFailures = newArrayList();
+                }
+                shardFailures.add(new DefaultShardOperationFailedException((BroadcastShardOperationFailedException) shardResponse));
+            } else {
+                YPercolateShardResponse batchPercolateShardResponse = (YPercolateShardResponse) shardResponse;
+                successfulShards++;
+                if (!batchPercolateShardResponse.isEmpty()) {
+                    shardResults.add(batchPercolateShardResponse);
+                }
+            }
         }
 
-        public ReduceResult(long count, InternalAggregations reducedAggregations) {
-            this.count = count;
-            this.matches = null;
-            this.reducedAggregations = reducedAggregations;
-        }
+        long tookInMillis = System.currentTimeMillis() - request.startTime;
+        if (shardResults.isEmpty()) {
+            return new YPercolateResponse(
+                    new ArrayList<YPercolateResponseItem>(), tookInMillis, shardsResponses.length(), successfulShards, failedShards, shardFailures
+            );
+        } else {
+            YPercolateResponseItem mergedItem = new YPercolateResponseItem();
 
-        public long count() {
-            return count;
-        }
+            for(YPercolateShardResponse response : shardResults){
+                YPercolateResponseItem item = response.getItem();
+                mergedItem.getMatches().putAll(item.getMatches());
+                mergedItem.setDocId(item.getDocId());
+            }
 
-        public YPercolateResponse.Match[] matches() {
-            return matches;
-        }
-
-        public InternalAggregations reducedAggregations() {
-            return reducedAggregations;
+            List<YPercolateResponseItem> listItems = newArrayList(new YPercolateResponseItem[]{ mergedItem });
+            return new YPercolateResponse(
+                listItems, tookInMillis, shardsResponses.length(), successfulShards, failedShards, shardFailures
+            );
         }
     }
 }
