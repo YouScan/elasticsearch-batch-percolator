@@ -124,7 +124,7 @@ public class YPercolatorService extends AbstractComponent {
         defaultSearchTimeout = settings.getAsTime(DEFAULT_SEARCH_TIMEOUT, NO_TIMEOUT);
     }
 
-    public Iterable<PercolateResult> percolate(Iterable<Tuple<Integer, YPercolateShardRequest>> requestSlots, ShardId shardId)  throws IOException {
+    public Iterable<PercolateResult> percolate(Iterable<Tuple<Integer, YPercolateShardRequest>> requestSlots, ShardId shardId) throws Throwable {
 
         // See PercolatorService.PercolatorType
         final byte percolatorTypeId = 0x03;
@@ -166,6 +166,7 @@ public class YPercolatorService extends AbstractComponent {
                 for(Tuple<Integer, YPercolateShardRequest> request: requests){
                     YPercolateShardResponse response = new YPercolateShardResponse(null, shardId.getIndex(), shardId.id(), percolatorTypeId);
                     PercolateResult resultItem = new PercolateResult(request.v1(), response);
+                    result.add(resultItem);
                 }
                 return result;
             }

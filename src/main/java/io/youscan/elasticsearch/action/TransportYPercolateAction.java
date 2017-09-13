@@ -1,5 +1,6 @@
 package io.youscan.elasticsearch.action;
 
+import com.google.common.collect.Iterables;
 import io.youscan.elasticsearch.index.YPercolatorService;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ShardOperationFailedException;
@@ -179,7 +180,7 @@ public class TransportYPercolateAction extends TransportBroadcastAction<YPercola
             Iterable<YPercolatorService.PercolateResult> responses = percolatorService.percolate(requests, request.shardId());
 
             // There is a single response. Either failed or not.
-            YPercolatorService.PercolateResult r = responses.iterator().next();
+            YPercolatorService.PercolateResult r = Iterables.getOnlyElement(responses);
             if(r.isError()){
                 throw r.getError();
             } else {
