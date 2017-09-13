@@ -35,6 +35,7 @@ public abstract class AbstractNodesTests {
             .put("cluster.name", "test-cluster-" + LegacyNetworkUtils.getLocalAddress().getHostName())
             .put(InternalSettingsPreparer.IGNORE_SYSTEM_PROPERTIES_SETTING, true)
             .put("node.mode", "local")
+            .put("index.max_result_window", "2147483647")
             .build();
 
     public static Node startNode(String id, Collection<Class<? extends Plugin>> classpathPlugins) {
