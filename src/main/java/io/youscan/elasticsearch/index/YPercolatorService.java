@@ -9,6 +9,7 @@ import io.youscan.elasticsearch.action.*;
 import io.youscan.elasticsearch.shard.QueryAndSource;
 import io.youscan.elasticsearch.shard.QueryMatch;
 import io.youscan.elasticsearch.shard.YPercolatorQueriesRegistry;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
@@ -34,14 +35,12 @@ import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.xcontent.*;
 import org.elasticsearch.index.IndexService;
 import org.elasticsearch.index.engine.Engine;
-import org.elasticsearch.index.mapper.DocumentMapperForType;
-import org.elasticsearch.index.mapper.MapperService;
-import org.elasticsearch.index.mapper.ParsedDocument;
+import org.elasticsearch.index.mapper.*;
+import org.elasticsearch.index.mapper.internal.UidFieldMapper;
 import org.elasticsearch.index.query.ParsedQuery;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.indices.IndicesService;
-import org.elasticsearch.percolator.PercolateContext;
 import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchParseElement;
@@ -151,7 +150,7 @@ public class YPercolatorService extends AbstractComponent {
         Query aliasFilter = percolateIndexService.aliasesService().aliasFilter(filteringAliases);
         SearchShardTarget searchShardTarget = new SearchShardTarget(clusterService.localNode().id(), shardId.getIndex(), shardId.id());
 
-        Map<Integer, YPercolateContext> contexts = createPercolateContexts(requests,
+        Map<Integer, YPercolateContext> percolateContexts = createPercolateContexts(requests,
                 searchShardTarget, indexShard, percolateIndexService,
                 pageCacheRecycler, bigArrays, scriptService,
                 aliasFilter, parseFieldMatcher);
@@ -160,7 +159,7 @@ public class YPercolatorService extends AbstractComponent {
         SearchContext searchContext = null;
 
         try {
-            List<Tuple<Integer, ParsedDocument>> parsedDocuments =  parseRequests(percolateIndexService, requests, contexts, shardId.getIndex());
+            List<Tuple<Integer, ParsedDocument>> parsedDocuments =  parseRequests(percolateIndexService, requests, percolateContexts, shardId.getIndex());
 
             if (percolateQueries.isEmpty()) {
                 List<PercolateResult> result = new ArrayList<>(requests.size());
@@ -173,9 +172,6 @@ public class YPercolatorService extends AbstractComponent {
 
             List<Integer> nonParsedDocs = Lists.newArrayList();
 
-            // We use a RAMDirectory here instead of a MemoryIndex.
-            // In our tests MemoryIndex had worse indexing performance for normal sized quiddities.
-            RamDirectoryPercolatorIndex index = new RamDirectoryPercolatorIndex(indexShard.mapperService());
             List<ParsedDocument> docs = new ArrayList<>(parsedDocuments.size());
             for (Tuple<Integer, ParsedDocument> doc: parsedDocuments){
                 if(doc.v2() != null){
@@ -185,6 +181,9 @@ public class YPercolatorService extends AbstractComponent {
                 }
             }
 
+            // We use a RAMDirectory here instead of a MemoryIndex.
+            // In our tests MemoryIndex had worse indexing performance for normal sized quiddities.
+            RamDirectoryPercolatorIndex index = new RamDirectoryPercolatorIndex(indexShard.mapperService());
             directory = index.indexDocuments(docs);
 
             searchContext = createSearchContext(shardId, percolateIndexService, indexShard, directory);
@@ -219,7 +218,7 @@ public class YPercolatorService extends AbstractComponent {
             return result;
 
         } finally{
-            for (YPercolateContext context: contexts.values()){
+            for (YPercolateContext context: percolateContexts.values()){
                 context.close();
             }
 
@@ -243,7 +242,7 @@ public class YPercolatorService extends AbstractComponent {
 
         for (Tuple<Integer, YPercolateShardRequest> requestTuple: requests){
 
-            int slot = requestTuple.v1();
+            Integer slot = requestTuple.v1();
             YPercolateShardRequest request = requestTuple.v2();
             YPercolateContext context = contexts.get(slot);
 
@@ -258,7 +257,6 @@ public class YPercolatorService extends AbstractComponent {
 
             ParsedDocument doc = null;
             XContentParser parser = null;
-
 
             try{
 
@@ -279,13 +277,19 @@ public class YPercolatorService extends AbstractComponent {
 
                             MapperService mapperService = documentIndexService.mapperService();
                             DocumentMapperForType docMapper = mapperService.documentMapperWithAutoCreate(request.documentType());
-                            doc = docMapper.getDocumentMapper().parse(source(parser).index(index).type(request.documentType()).flyweight(true));
+                            SourceToParse sourceToParse = source(parser)
+                                    .index(index)
+                                    .type(request.documentType())
+                                    .id(slot.toString())
+                                    .flyweight(true);
+                            doc = docMapper.getDocumentMapper().parse(sourceToParse);
                             if (docMapper.getMapping() != null) {
                                 doc.addDynamicMappingsUpdate(docMapper.getMapping());
                             }
                             if (doc.dynamicMappingsUpdate() != null) {
                                 mappingUpdatedAction.updateMappingOnMasterSynchronously(request.shardId().getIndex(), request.documentType(), doc.dynamicMappingsUpdate());
                             }
+
                             // the document parsing exists the "doc" object, so we need to set the new current field.
                             currentFieldName = parser.currentName();
                         }
@@ -414,8 +418,9 @@ public class YPercolatorService extends AbstractComponent {
         Map<Integer, YPercolateResponseItem> responses = Maps.newHashMap();
 
         for(Tuple<Integer, ParsedDocument> document : parsedDocuments){
-            String docId = document.v1().toString(); // Original doc's id is null always
+            String docId = document.v2().id();
             slotIds.put(docId, document.v1());
+
             responses.put(document.v1(), new YPercolateResponseItem(docId));
         }
 
