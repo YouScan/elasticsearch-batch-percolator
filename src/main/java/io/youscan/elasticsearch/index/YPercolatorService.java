@@ -378,8 +378,8 @@ public class YPercolatorService extends AbstractComponent {
                 }
 
             } catch (Throwable e) {
-                // throw new ElasticsearchParseException("failed to parse request", e);
                 logger.debug("failed to parse request", e);
+                throw new ElasticsearchParseException("failed to parse request", e);
             } finally {
                 if (parser != null) {
                     parser.close();

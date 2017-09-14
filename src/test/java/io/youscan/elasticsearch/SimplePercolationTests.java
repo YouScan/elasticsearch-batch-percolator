@@ -3,6 +3,7 @@ package io.youscan.elasticsearch;
 import io.youscan.elasticsearch.action.*;
 import io.youscan.elasticsearch.index.YPercolatorService;
 import io.youscan.elasticsearch.plugin.YPercolatorPlugin;
+import io.youscan.elasticsearch.shard.QueryMatch;
 import org.elasticsearch.action.percolate.PercolateSourceBuilder;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.plugins.Plugin;
@@ -11,6 +12,8 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 import static org.elasticsearch.action.percolate.PercolateSourceBuilder.docBuilder;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
@@ -51,32 +54,29 @@ public class SimplePercolationTests extends AbstractNodesTests {
         logger.info("--> register the queries");
         client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "1")
                 .setSource(jsonBuilder()
-                        .startObject()
+                    .startObject()
                         .field("query", matchQuery("field1", "b"))
-                        .field("group", "g1")
-                        .field("query_hash", "hash1")
-                        .endObject()
+                    .endObject()
                 ).execute().actionGet();
         client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "2")
-                .setSource(jsonBuilder().startObject()
+                .setSource(jsonBuilder()
+                    .startObject()
                         .field("query", matchQuery("field1", "c"))
-                        .field("group", "g2")
-                        .field("query_hash", "hash2")
-                        .endObject()
+                    .endObject()
                 ).execute().actionGet();
         client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "3")
-                .setSource(jsonBuilder().startObject()
+                .setSource(jsonBuilder()
+                    .startObject()
                         .field("query", boolQuery()
-                                .must(matchQuery("field1", "b"))
-                                .must(matchQuery("field1", "c")))
-                        .field("group", "g3")
-                        .field("query_hash", "hash3").endObject()
+                            .must(matchQuery("field1", "b"))
+                            .must(matchQuery("field1", "c")))
+                    .endObject()
                 ).execute().actionGet();
         client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "4")
-                .setSource(jsonBuilder().startObject()
+                .setSource(jsonBuilder()
+                    .startObject()
                         .field("query", matchAllQuery())
-                        .field("group", "g4")
-                        .field("query_hash", "hash4").endObject()
+                    .endObject()
                 ).execute().actionGet();
 
         client.admin().indices().prepareRefresh(indexWithPercolator).execute().actionGet();
@@ -87,11 +87,10 @@ public class SimplePercolationTests extends AbstractNodesTests {
                 .setDocumentType(docForPercolateType)
                 .setSource(new PercolateSourceBuilder()
                     .setDoc(docBuilder()
-                            .setDoc(jsonBuilder()
-                                    .startObject()
-                                        .field("_id", "1")
-                                        .field("field1", "b")
-                                    .endObject()))
+                        .setDoc(jsonBuilder()
+                            .startObject()
+                                .field("field1", "b")
+                            .endObject()))
                 )
                 .execute().actionGet();
 
@@ -100,10 +99,10 @@ public class SimplePercolationTests extends AbstractNodesTests {
 
         ArrayList<String> keys = new ArrayList<>();
         for (YPercolateResponseItem item: response.getResults()){
-//            for (match: item.getMatches())
-//            keys.add(item.getId().string());
-//
-//            assertThat(item.getHighlightFields().size(), is(0));
+            for (Map.Entry<String, QueryMatch> match: item.getMatches().entrySet()){
+                keys.add(match.getKey());
+                assertThat(match.getValue().getHighlights().size(), is(0));
+            }
         }
 
         assertThat(keys, hasItems("1", "4"));
@@ -124,38 +123,34 @@ public class SimplePercolationTests extends AbstractNodesTests {
         logger.info("--> register the queries");
         client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "1")
                 .setSource(jsonBuilder()
-                        .startObject()
+                    .startObject()
                         .field("query", matchQuery("field1", "b"))
-                        .field("group", "g1")
-                        .field("query_hash", "hash1")
-                        .endObject()
+                    .endObject()
                 ).execute().actionGet();
         client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "2")
-                .setSource(jsonBuilder().startObject()
+                .setSource(jsonBuilder()
+                    .startObject()
                         .field("query", matchQuery("field1", "c"))
-                        .field("group", "g2")
-                        .field("query_hash", "hash2")
-                        .endObject()
+                    .endObject()
                 ).execute().actionGet();
         client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "3")
-                .setSource(jsonBuilder().startObject()
+                .setSource(jsonBuilder()
+                    .startObject()
                         .field("query", boolQuery()
-                                .must(matchQuery("field1", "b"))
-                                .must(matchQuery("field1", "c")))
-                        .field("group", "g3")
-                        .field("query_hash", "hash3").endObject()
+                            .must(matchQuery("field1", "b"))
+                            .must(matchQuery("field1", "c"))
+                        )
+                    .endObject()
                 ).execute().actionGet();
         client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "4")
                 .setSource(jsonBuilder().startObject()
-                        .field("query", matchAllQuery())
-                        .field("group", "g4")
-                        .field("query_hash", "hash4").endObject()
+                    .field("query", matchAllQuery())
                 ).execute().actionGet();
 
         client.admin().indices().prepareRefresh(indexWithPercolator).execute().actionGet();
 
         logger.info("--> Percolate doc with field1=b");
-        MultiYPercolateResponse response = new MultiYPercolateRequestBuilder(client)
+        MultiYPercolateResponse responses = new MultiYPercolateRequestBuilder(client)
                 .add(new YPercolateRequestBuilder(client)
                         .setIndices(indexWithPercolator)
                         .setDocumentType(docForPercolateType)
@@ -163,24 +158,27 @@ public class SimplePercolationTests extends AbstractNodesTests {
                                 .setDoc(docBuilder()
                                         .setDoc(jsonBuilder()
                                                 .startObject()
-                                                .field("_id", "1")
-                                                .field("field1", "b")
-                                                .endObject()))
+                                                    .field("field1", "b")
+                                                .endObject())
+                                )
                         )
                 )
                 .execute().actionGet();
 
-        assertThat(response.getItems().length, is(1));
+        assertThat(responses.getItems().length, is(1));
 
-//        assertThat(response.getMatches().length, is(2));
-//
-//        ArrayList<String> keys = new ArrayList<>();
-//        for (YPercolateResponse.Match item: response.getMatches()){
-//            keys.add(item.getId().string());
-//
-//            assertThat(item.getHighlightFields().size(), is(0));
-//        }
-//
-//        assertThat(keys, hasItems("1", "4"));
+        List<YPercolateResponseItem> results = responses.getItems()[0].getResponse().getResults();
+        assertThat(results.size(), is(1));
+        assertThat(results.get(0).getMatches().size(), is(2));
+
+        ArrayList<String> keys = new ArrayList<>();
+        for (YPercolateResponseItem item: results){
+            for (Map.Entry<String, QueryMatch> match: item.getMatches().entrySet()){
+                keys.add(match.getKey());
+                assertThat(match.getValue().getHighlights().size(), is(0));
+            }
+        }
+
+        assertThat(keys, hasItems("1", "4"));
     }
 }

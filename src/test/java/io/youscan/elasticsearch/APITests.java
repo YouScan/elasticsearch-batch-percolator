@@ -59,47 +59,33 @@ public class APITests extends AbstractNodesTests {
         logger.info("--> register the queries");
         client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "1")
                 .setSource(jsonBuilder()
-                        .startObject()
+                    .startObject()
                         .field("query", matchQuery("field1", "b"))
-                        .field("group", "g1")
-                        .field("query_hash", "hash1")
-                        .endObject()
+                    .endObject()
                 ).execute().actionGet();
         client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "2")
                 .setSource(jsonBuilder().startObject()
                         .field("query", matchQuery("field1", "c"))
-                        .field("group", "g2")
-                        .field("query_hash", "hash2")
-                        .endObject()
+                    .endObject()
                 ).execute().actionGet();
         client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "3")
-                .setSource(jsonBuilder().startObject()
+                .setSource(jsonBuilder()
+                    .startObject()
                         .field("query", boolQuery()
                                 .must(matchQuery("field1", "b"))
                                 .must(matchQuery("field1", "c")))
-                        .field("group", "g3")
-                        .field("query_hash", "hash3").endObject()
+                    .endObject()
                 ).execute().actionGet();
         client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "4")
-                .setSource(jsonBuilder().startObject()
+                .setSource(jsonBuilder()
+                    .startObject()
                         .field("query", matchAllQuery())
-                        .field("group", "g4")
-                        .field("query_hash", "hash4").endObject()
+                    .endObject()
                 ).execute().actionGet();
 
         client.admin().indices().prepareRefresh(indexWithPercolator).execute().actionGet();
 
-        BytesReference source = new BatchPercolateSourceBuilder().addDoc(
-                docBuilder().setDoc(jsonBuilder()
-                        .startObject()
-                        .field("_id", docId)
-                        .field("field1", "the fox is here")
-                        .field("field2", "meltwater percolator")
-                        .endObject()))
-                .toXContent(JsonXContent.contentBuilder(), EMPTY_PARAMS).bytes();
-
-        // String body = source.toUtf8();
-        String body = "{ \"doc\": { \"field1\": \"the fox is here\", \"field2\": \"meltwater percolator\" } }";
+        String body = "{ \"highlight\": { \"fields\": { \"field1\": {}, \"field2\":{} } },  \"doc\": { \"field1\": \"the fox is here\", \"field2\": \"meltwater percolator\" } }";
 
         logger.info("--> Request body:\n" + body);
 
@@ -114,7 +100,6 @@ public class APITests extends AbstractNodesTests {
         logger.info("--> Response body:\n" + responseBody);
 
         assertThat(restResponse.getStatusCode(), equalTo(200));
-
 
 //        List<String> results = JsonPath.read(responseBody, "$.results");
 //        assertThat(results.size(), is(1));
