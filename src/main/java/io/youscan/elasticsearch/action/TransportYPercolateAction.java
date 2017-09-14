@@ -137,8 +137,8 @@ public class TransportYPercolateAction extends TransportBroadcastAction<YPercola
                 return r.getResponse();
             }
         } catch (Throwable e) {
-            logger.trace("{} failed to percolate", e, request.shardId());
-            throw new PercolateException(request.shardId(), "failed to percolate", e);
+            logger.debug("{} failed to percolate", e, request.shardId());
+            throw new YPercolateException(request.shardId(), "failed to percolate", e);
         }
     }
 }
