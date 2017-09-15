@@ -1,14 +1,17 @@
 package io.youscan.elasticsearch;
 
 import com.meltwater.elasticsearch.action.BatchPercolateSourceBuilder;
+import com.meltwater.elasticsearch.index.BatchPercolatorService;
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.Response;
 import io.youscan.elasticsearch.index.YPercolatorService;
 import io.youscan.elasticsearch.plugin.YPercolatorPlugin;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.bytes.BytesReference;
+import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.json.JsonXContent;
 import org.elasticsearch.plugins.Plugin;
+import org.elasticsearch.search.highlight.HighlightBuilder;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -32,7 +35,6 @@ public class APITests extends AbstractNodesTests {
         classpathPlugins.add(YPercolatorPlugin.class);
         startNode("node1", classpathPlugins);
         client = client("node1");
-
     }
 
     @AfterClass
@@ -43,40 +45,42 @@ public class APITests extends AbstractNodesTests {
     @Test
     public void testSingleDocPercolation() throws Throwable {
 
-        final String docId = "docId";
         AsyncHttpClient asyncHttpClient = new AsyncHttpClient();
-
-        logger.info("--> Add dummy doc to auto create the indexWithPercolator");
-        client.admin().indices().prepareDelete("_all").execute().actionGet();
 
         final String indexWithPercolator = "index1";
         final String docForPercolateType = "type1";
 
+        logger.info("--> Add dummy doc");
+        client.admin().indices().prepareDelete("_all").execute().actionGet();
         client.prepareIndex(indexWithPercolator, docForPercolateType, "1")
-                .setSource("field1", "value1")
+                .setSource("field1", "value", "field2", "value").execute().actionGet();
+
+        logger.info("--> register query1 with highlights");
+        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "001")
+                .setSource(getSource(
+                        termQuery("field1", "fox"),
+                        new HighlightBuilder()
+                                .field("field1")
+                                .preTags("<b>")
+                                .postTags("</b>"))
+                )
                 .execute().actionGet();
 
-        logger.info("--> register the queries");
-        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "1")
-                .setSource(jsonBuilder()
-                    .startObject()
-                        .field("query", matchQuery("field1", "b"))
-                    .endObject()
-                ).execute().actionGet();
-        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "2")
-                .setSource(jsonBuilder().startObject()
-                        .field("query", matchQuery("field1", "c"))
-                    .endObject()
-                ).execute().actionGet();
-        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "3")
-                .setSource(jsonBuilder()
-                    .startObject()
-                        .field("query", boolQuery()
-                                .must(matchQuery("field1", "b"))
-                                .must(matchQuery("field1", "c")))
-                    .endObject()
-                ).execute().actionGet();
-        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "4")
+        logger.info("--> register query2 with highlights");
+        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "002")
+                .setSource(getSource(
+                        termQuery("field2", "youscan"),
+                        new HighlightBuilder()
+                                .requireFieldMatch(true)
+                                .order("score")
+                                .highlightQuery(termQuery("field2", "youscan"))
+                                .field("field1")
+                                .preTags("<b>")
+                                .postTags("</b>")))
+                .execute().actionGet();
+
+        logger.info("--> register query3 to have at least one match");
+        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "003")
                 .setSource(jsonBuilder()
                     .startObject()
                         .field("query", matchAllQuery())
@@ -85,19 +89,31 @@ public class APITests extends AbstractNodesTests {
 
         client.admin().indices().prepareRefresh(indexWithPercolator).execute().actionGet();
 
-        String body = "{ \"highlight\": { \"fields\": { \"field1\": {}, \"field2\":{} } },  \"doc\": { \"field1\": \"the fox is here\", \"field2\": \"meltwater percolator\" } }";
+        logger.info("--> Doing percolation with Rest API");
 
-        logger.info("--> Request body:\n" + body);
+        String body = jsonBuilder()
+                .startObject()
+                    .rawField("doc", jsonBuilder()
+                            .startObject()
+                                .field("docSlot", "0")
+                                .field("field1", "the fox is here")
+                                .field("field2", "youscan percolator")
+                            .endObject().bytes())
+                .endObject()
+                //.prettyPrint()
+                .string();
+
+        logger.info("   --> Request body:\n" + body);
 
         Response restResponse = asyncHttpClient.preparePost("http://localhost:9200/"+indexWithPercolator+"/"+docForPercolateType+"/_ypercolate?pretty=true")
-                .setHeader("Content-type", "application/json")
+                .setHeader("content-type", "application/json")
                 .setBody(body)
                 .execute()
                 .get();
 
         String responseBody = restResponse.getResponseBody();
 
-        logger.info("--> Response body:\n" + responseBody);
+        logger.info("   --> Response body:\n" + responseBody);
 
         assertThat(restResponse.getStatusCode(), equalTo(200));
 
@@ -112,72 +128,61 @@ public class APITests extends AbstractNodesTests {
 //        assertThat(JsonPath.<List<String>>read(responseBody, "$.results[0].matches[?(@.query_id==1)].highlights.field1[0]").get(0), is("the <b>fox</b> is here"));
 //        assertThat(JsonPath.<List<String>>read(responseBody, "$.results[0].matches[?(@.query_id==2)].query_id").get(0), is("2"));
 //        assertThat(JsonPath.<List<String>>read(responseBody, "$.results[0].matches[?(@.query_id==2)].highlights.field2[0]").get(0), is("<b>meltwater</b> percolator"));
-
     }
 
     @Test
     public void testMultiDocPercolation() throws Throwable{
-        final String docId = "docId";
         AsyncHttpClient asyncHttpClient = new AsyncHttpClient();
-
-        logger.info("--> Add dummy doc to auto create the indexWithPercolator");
-        client.admin().indices().prepareDelete("_all").execute().actionGet();
 
         final String indexWithPercolator = "index1";
         final String docForPercolateType = "type1";
 
+        logger.info("--> Add dummy doc");
+        client.admin().indices().prepareDelete("_all").execute().actionGet();
         client.prepareIndex(indexWithPercolator, docForPercolateType, "1")
-                .setSource("field1", "value1")
+                .setSource("field1", "value", "field2", "value").execute().actionGet();
+
+        logger.info("--> register query1 with highlights");
+        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "001")
+                .setSource(getSource(
+                        termQuery("field1", "fox"),
+                        new HighlightBuilder()
+                                .field("field1")
+                                .preTags("<b>")
+                                .postTags("</b>"))
+                )
                 .execute().actionGet();
 
-        logger.info("--> register the queries");
-        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "1")
+        logger.info("--> register query2 with highlights");
+        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "002")
+                .setSource(getSource(
+                        termQuery("field2", "youscan"),
+                        new HighlightBuilder()
+                                .requireFieldMatch(true)
+                                .order("score")
+                                .highlightQuery(termQuery("field2", "youscan"))
+                                .field("field1")
+                                .preTags("<b>")
+                                .postTags("</b>")))
+                .execute().actionGet();
+
+        logger.info("--> register query3 to have at least one match");
+        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "003")
                 .setSource(jsonBuilder()
                         .startObject()
-                        .field("query", matchQuery("field1", "b"))
-                        .field("group", "g1")
-                        .field("query_hash", "hash1")
-                        .endObject()
-                ).execute().actionGet();
-        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "2")
-                .setSource(jsonBuilder().startObject()
-                        .field("query", matchQuery("field1", "c"))
-                        .field("group", "g2")
-                        .field("query_hash", "hash2")
-                        .endObject()
-                ).execute().actionGet();
-        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "3")
-                .setSource(jsonBuilder().startObject()
-                        .field("query", boolQuery()
-                                .must(matchQuery("field1", "b"))
-                                .must(matchQuery("field1", "c")))
-                        .field("group", "g3")
-                        .field("query_hash", "hash3").endObject()
-                ).execute().actionGet();
-        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "4")
-                .setSource(jsonBuilder().startObject()
                         .field("query", matchAllQuery())
-                        .field("group", "g4")
-                        .field("query_hash", "hash4").endObject()
+                        .endObject()
                 ).execute().actionGet();
 
         client.admin().indices().prepareRefresh(indexWithPercolator).execute().actionGet();
 
-        BytesReference source = new BatchPercolateSourceBuilder().addDoc(
-                docBuilder().setDoc(jsonBuilder()
-                        .startObject()
-                        .field("_id", docId)
-                        .field("field1", "the fox is here")
-                        .field("field2", "meltwater percolator")
-                        .endObject()))
-                .toXContent(JsonXContent.contentBuilder(), EMPTY_PARAMS).bytes();
+        logger.info("--> Doing percolation with Rest API");
 
-        // String body = source.toUtf8();
         String body =
                 "{ \"percolate\": { \"index\":\""+ indexWithPercolator +"\", \"type\":\"" + docForPercolateType + "\" } }\n" +
-                "{ \"doc\": { \"field1\": \"the fox is here\", \"field2\": \"Youscan\" } }\n" +
+                "{ \"doc\": { \"docSlot\": \"0\", \"field1\": \"the fox is here\", \"field2\": \"youscan percolator\" } }\n" +
                 "{ \"percolate\": { \"index\":\""+ indexWithPercolator +"\", \"type\":\"" + docForPercolateType + "\" } }\n" +
-                "{ \"doc\": { \"field1\": \"bad wolf\", \"field2\": \"percolator\" } }\n";
+                "{ \"doc\": { \"docSlot\": \"1\", \"field1\": \"bad wolf\", \"field2\": \"dr who\" } }\n";
 
         logger.info("--> Request body:\n" + body);
 

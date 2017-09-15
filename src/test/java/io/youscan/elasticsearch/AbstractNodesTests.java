@@ -5,16 +5,23 @@ import org.elasticsearch.client.Client;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.xcontent.ToXContent;
+import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.node.internal.InternalSettingsPreparer;
 import org.elasticsearch.plugins.Plugin;
+import org.elasticsearch.search.highlight.HighlightBuilder;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 
 import static com.google.common.collect.Maps.newHashMap;
 import static org.elasticsearch.common.settings.Settings.Builder.EMPTY_SETTINGS;
+import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 
 public abstract class AbstractNodesTests {
 
@@ -87,6 +94,14 @@ public abstract class AbstractNodesTests {
 
     public static Client client(String id) {
         return clients.get(id);
+    }
+
+    public XContentBuilder getSource(QueryBuilder query, HighlightBuilder highlightBuilder) throws IOException {
+        XContentBuilder builder = jsonBuilder().startObject();
+        builder.field("query", query);
+        highlightBuilder.toXContent(builder, new ToXContent.MapParams(Collections.<String, String>emptyMap()));
+        builder.endObject();
+        return builder;
     }
 
 }
