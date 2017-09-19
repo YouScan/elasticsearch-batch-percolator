@@ -181,4 +181,140 @@ public class SimplePercolationTests extends AbstractNodesTests {
 
         assertThat(keys, hasItems("1", "4"));
     }
+
+    @Test
+    public void testMultiPercolatioWhenNoMatches() throws Throwable{
+        logger.info("--> Add dummy doc to auto create the indexWithPercolator");
+        client.admin().indices().prepareDelete("_all").execute().actionGet();
+
+        final String indexWithPercolator = "index1";
+        final String docForPercolateType = "type1";
+
+        client.prepareIndex(indexWithPercolator, docForPercolateType, "1")
+                .setSource("field1", "value1")
+                .execute().actionGet();
+
+        logger.info("--> register the queries");
+        client.prepareIndex(indexWithPercolator, YPercolatorService.TYPE_NAME, "1")
+                .setSource(jsonBuilder()
+                    .startObject()
+                        .field("query", matchQuery("field1", "b"))
+                    .endObject()
+                ).execute().actionGet();
+
+        client.admin().indices().prepareRefresh(indexWithPercolator).execute().actionGet();
+
+        logger.info("--> Percolate doc with field1=b");
+        MultiYPercolateResponse responses = new MultiYPercolateRequestBuilder(client)
+                .add(
+                        new YPercolateRequestBuilder(client)
+                        .setIndices(indexWithPercolator)
+                        .setDocumentType(docForPercolateType)
+                        .setSource(new PercolateSourceBuilder()
+                                .setDoc(docBuilder()
+                                        .setDoc(jsonBuilder()
+                                                .startObject()
+                                                    .field("field1", "abalabagama #1")
+                                                .endObject())
+                                )
+                        )
+                )
+                .add(
+                        new YPercolateRequestBuilder(client)
+                        .setIndices(indexWithPercolator)
+                        .setDocumentType(docForPercolateType)
+                        .setSource(new PercolateSourceBuilder()
+                                .setDoc(docBuilder()
+                                        .setDoc(jsonBuilder()
+                                                .startObject()
+                                                    .field("field1", "abalabagama #2")
+                                                .endObject())
+                                )
+                        )
+                )
+                .add(
+                        new YPercolateRequestBuilder(client)
+                        .setIndices(indexWithPercolator)
+                        .setDocumentType(docForPercolateType)
+                        .setSource(new PercolateSourceBuilder()
+                                .setDoc(docBuilder()
+                                        .setDoc(jsonBuilder()
+                                                .startObject()
+                                                    .field("field1", "abalabagama #3")
+                                                .endObject())
+                                )
+                        )
+                )
+                .execute().actionGet();
+
+        assertThat(responses.getItems().length, is(3));
+
+        assertThat(responses.getItems()[0].getResponse().getResults().size(), is(0));
+        assertThat(responses.getItems()[1].getResponse().getResults().size(), is(0));
+        assertThat(responses.getItems()[2].getResponse().getResults().size(), is(0));
+    }
+
+    @Test
+    public void testMultiPercolatioWhenNoQueriesRegistered() throws Throwable{
+        logger.info("--> Add dummy doc to auto create the indexWithPercolator");
+        client.admin().indices().prepareDelete("_all").execute().actionGet();
+
+        final String indexWithPercolator = "index1";
+        final String docForPercolateType = "type1";
+
+        client.prepareIndex(indexWithPercolator, docForPercolateType, "1")
+                .setSource("field1", "value1")
+                .execute().actionGet();
+
+        client.admin().indices().prepareRefresh(indexWithPercolator).execute().actionGet();
+
+        logger.info("--> Percolate doc with field1=b");
+        MultiYPercolateResponse responses = new MultiYPercolateRequestBuilder(client)
+                .add(
+                        new YPercolateRequestBuilder(client)
+                        .setIndices(indexWithPercolator)
+                        .setDocumentType(docForPercolateType)
+                        .setSource(new PercolateSourceBuilder()
+                                .setDoc(docBuilder()
+                                        .setDoc(jsonBuilder()
+                                                .startObject()
+                                                    .field("field1", "abalabagama #1")
+                                                .endObject())
+                                )
+                        )
+                )
+                .add(
+                        new YPercolateRequestBuilder(client)
+                        .setIndices(indexWithPercolator)
+                        .setDocumentType(docForPercolateType)
+                        .setSource(new PercolateSourceBuilder()
+                                .setDoc(docBuilder()
+                                        .setDoc(jsonBuilder()
+                                                .startObject()
+                                                    .field("field1", "abalabagama #2")
+                                                .endObject())
+                                )
+                        )
+                )
+                .add(
+                        new YPercolateRequestBuilder(client)
+                        .setIndices(indexWithPercolator)
+                        .setDocumentType(docForPercolateType)
+                        .setSource(new PercolateSourceBuilder()
+                                .setDoc(docBuilder()
+                                        .setDoc(jsonBuilder()
+                                                .startObject()
+                                                    .field("field1", "abalabagama #3")
+                                                .endObject())
+                                )
+                        )
+                )
+                .execute().actionGet();
+
+        assertThat(responses.getItems().length, is(3));
+
+        assertThat(responses.getItems()[0].getResponse().getResults().size(), is(0));
+        assertThat(responses.getItems()[1].getResponse().getResults().size(), is(0));
+        assertThat(responses.getItems()[2].getResponse().getResults().size(), is(0));
+    }
 }
