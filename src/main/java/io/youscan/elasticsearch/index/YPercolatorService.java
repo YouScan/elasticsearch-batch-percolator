@@ -56,6 +56,7 @@ import org.elasticsearch.search.highlight.HighlightPhase;
 import org.elasticsearch.search.internal.DefaultSearchContext;
 import org.elasticsearch.search.internal.SearchContext;
 import org.elasticsearch.search.internal.ShardSearchLocalRequest;
+import org.elasticsearch.search.lookup.LeafSearchLookup;
 import org.elasticsearch.search.query.QueryPhase;
 import org.elasticsearch.search.sort.SortParseElement;
 
@@ -351,7 +352,10 @@ public class YPercolatorService extends AbstractComponent {
 
                 // We need to get the actual source from the request body for highlighting, so parse the request body again
                 // and only get the doc source.
-                if (context.highlight() != null) {
+                // if (context.highlight() != null) {
+
+                // Highlights are stored within the registered queries. So, we assuming we always need the source to be parsed
+                if (true) {
                     parser.close();
                     currentFieldName = null;
                     parser = XContentFactory.xContent(source).createParser(source);
@@ -433,16 +437,19 @@ public class YPercolatorService extends AbstractComponent {
             String docId = document.v2().id();
             slotIds.put(docId, document.v1());
 
+            // TODO Set all documents here
+            IndexReader indexReader = context.searcher().getIndexReader();
+            LeafReaderContext atomicReaderContext = indexReader.leaves().get(0);
+            LeafSearchLookup leafLookup = context.lookup().getLeafSearchLookup(atomicReaderContext);
+            leafLookup.setDocument(0);
+            leafLookup.source().setSource(document.v2().source());
+
             responses.put(document.v1(), new YPercolateResponseItem(docId));
         }
 
         for (Map.Entry<String, QueryAndSource> entry : percolateQueries.entrySet()) {
             try{
-                // Some queries (function_score query when for decay functions) rely on a SearchContext being set:
-                // We switch types because this context needs to be in the context of the percolate queries in the shard and
-                // not the in memory percolate doc
-                // String[] previousTypes = context.types();
-                // context.types(new String[]{TYPE_NAME});
+
                 SearchContext.setCurrent(context);
 
                 executeSearch(context, entry.getValue());
