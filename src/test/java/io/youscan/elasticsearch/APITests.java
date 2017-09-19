@@ -161,7 +161,7 @@ public class APITests extends AbstractNodesTests {
                                 .requireFieldMatch(true)
                                 .order("score")
                                 .highlightQuery(termQuery("field2", "youscan"))
-                                .field("field1")
+                                .field("field2")
                                 .preTags("<b>")
                                 .postTags("</b>")))
                 .execute().actionGet();
