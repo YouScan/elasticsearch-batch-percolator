@@ -180,9 +180,14 @@ public class APITests extends AbstractNodesTests {
 
         String body =
                 "{ \"percolate\": { \"index\":\""+ indexWithPercolator +"\", \"type\":\"" + docForPercolateType + "\" } }\n" +
-                "{ \"doc\": { \"docSlot\": \"0\", \"field1\": \"the fox is here\", \"field2\": \"youscan percolator\" } }\n" +
+                "{ \"doc\": { \"docSlot\": \"0\", \"field1\": \"the fox is here\" } }\n" +
+
                 "{ \"percolate\": { \"index\":\""+ indexWithPercolator +"\", \"type\":\"" + docForPercolateType + "\" } }\n" +
-                "{ \"doc\": { \"docSlot\": \"1\", \"field1\": \"bad wolf\", \"field2\": \"dr who\" } }\n";
+                "{ \"doc\": { \"docSlot\": \"1\", \"field2\": \"youscan percolator\" } }\n" +
+
+                "{ \"percolate\": { \"index\":\""+ indexWithPercolator +"\", \"type\":\"" + docForPercolateType + "\" } }\n" +
+                "{ \"doc\": { \"docSlot\": \"2\", \"field1\": \"bad wolf\", \"field2\": \"dr who\" } }\n"
+        ;
 
         logger.info("--> Request body:\n" + body);
 

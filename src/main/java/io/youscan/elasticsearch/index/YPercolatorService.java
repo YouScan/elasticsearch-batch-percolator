@@ -9,9 +9,7 @@ import io.youscan.elasticsearch.action.*;
 import io.youscan.elasticsearch.shard.QueryAndSource;
 import io.youscan.elasticsearch.shard.QueryMatch;
 import io.youscan.elasticsearch.shard.YPercolatorQueriesRegistry;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.*;
 import org.apache.lucene.search.*;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Counter;
@@ -32,6 +30,7 @@ import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.xcontent.*;
@@ -46,25 +45,20 @@ import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.indices.IndicesService;
 import org.elasticsearch.script.ScriptService;
-import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.search.SearchParseElement;
-import org.elasticsearch.search.SearchParseException;
-import org.elasticsearch.search.SearchShardTarget;
+import org.elasticsearch.search.*;
 import org.elasticsearch.search.aggregations.AggregationPhase;
 import org.elasticsearch.search.fetch.FetchPhase;
+import org.elasticsearch.search.fetch.FetchSubPhase;
+import org.elasticsearch.search.highlight.HighlightField;
 import org.elasticsearch.search.highlight.HighlightPhase;
-import org.elasticsearch.search.internal.DefaultSearchContext;
-import org.elasticsearch.search.internal.SearchContext;
-import org.elasticsearch.search.internal.ShardSearchLocalRequest;
+import org.elasticsearch.search.internal.*;
 import org.elasticsearch.search.lookup.LeafSearchLookup;
+import org.elasticsearch.search.lookup.SourceLookup;
 import org.elasticsearch.search.query.QueryPhase;
 import org.elasticsearch.search.sort.SortParseElement;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
@@ -193,8 +187,6 @@ public class YPercolatorService extends AbstractComponent {
             RamDirectoryPercolatorIndex index = new RamDirectoryPercolatorIndex(indexShard.mapperService());
             directory = index.indexDocuments(docs);
 
-            searchContext = createSearchContext(shardId, percolateIndexService, indexShard, directory);
-
             long filteringStart = System.currentTimeMillis();
             Map<String, QueryAndSource> filteredQueries = filterQueriesToSearchWith(percolateQueries, directory);
 
@@ -204,6 +196,9 @@ public class YPercolatorService extends AbstractComponent {
                     filteredQueries.size(),
                     System.currentTimeMillis() - filteringStart
             );
+
+            IndexSearcher searcher = new IndexSearcher(DirectoryReader.open(directory));
+            searchContext = createSearchContext(shardId, percolateIndexService, indexShard, searcher);
 
             Tuple<Map<Integer, YPercolateResponseItem>, Throwable> percolateResponsesResult = percolateResponses(searchContext, filteredQueries, parsedDocuments);
             Map<Integer, YPercolateResponseItem> responses = percolateResponsesResult.v1();
@@ -436,14 +431,6 @@ public class YPercolatorService extends AbstractComponent {
         for(Tuple<Integer, ParsedDocument> document : parsedDocuments){
             String docId = document.v2().id();
             slotIds.put(docId, document.v1());
-
-            // TODO Set all documents here
-            IndexReader indexReader = context.searcher().getIndexReader();
-            LeafReaderContext atomicReaderContext = indexReader.leaves().get(0);
-            LeafSearchLookup leafLookup = context.lookup().getLeafSearchLookup(atomicReaderContext);
-            leafLookup.setDocument(0);
-            leafLookup.source().setSource(document.v2().source());
-
             responses.put(document.v1(), new YPercolateResponseItem(docId));
         }
 
@@ -456,10 +443,34 @@ public class YPercolatorService extends AbstractComponent {
                 for (SearchHit searchHit  : context.fetchResult().hits()) {
                     String id = searchHit.getId();
 
+                    List<Map<String, HighlightField>> hls = new ArrayList<>();
+                    if(context.highlight() != null){
+
+                        InternalSearchHit internalSearchHit = (InternalSearchHit) searchHit;
+                        int docId = internalSearchHit.docId();
+
+                        ParsedDocument parsedDocument = parsedDocuments.get(slotIds.get(id)).v2();
+                        IndexReader indexReader = context.searcher().getIndexReader();
+                        LeafReaderContext readerContext = indexReader.leaves().get(0);
+                        LeafSearchLookup leafLookup = context.lookup().getLeafSearchLookup(readerContext);
+
+                        leafLookup.setDocument(docId);
+                        leafLookup.source().setSegmentAndDocument(readerContext, docId);
+
+                        Map<String, Object> sourceAsMap = SourceLookup.sourceAsMap(parsedDocument.source());
+                        leafLookup.source().setSource(sourceAsMap);
+                        leafLookup.source().setSource(parsedDocument.source());
+
+                        FetchSubPhase.HitContext hitContext = new FetchSubPhase.HitContext();
+                        hitContext.reset(internalSearchHit, readerContext, docId, context.searcher());
+                        highlightPhase.hitExecute(context, hitContext);
+                        hls.add(hitContext.hit().getHighlightFields());
+                    }
+
                     Integer slot = slotIds.get(id);
                     YPercolateResponseItem batchPercolateResponseItem = responses.get(slot);
 
-                    QueryMatch queryMatch = getQueryMatch(entry, searchHit);
+                    QueryMatch queryMatch = getQueryMatch(entry, searchHit, hls);
                     batchPercolateResponseItem.getMatches().put(queryMatch.getQueryId(), queryMatch);
                 }
             }
@@ -477,10 +488,14 @@ public class YPercolatorService extends AbstractComponent {
         return Tuple.tuple(responses, null);
     }
 
-    private QueryMatch getQueryMatch(Map.Entry<String, QueryAndSource> entry, SearchHit searchHit) {
+    private QueryMatch getQueryMatch(Map.Entry<String, QueryAndSource> entry, SearchHit searchHit, List<Map<String, HighlightField>> hls) {
         QueryMatch queryMatch = new QueryMatch();
         queryMatch.setQueryId(entry.getKey());
-        queryMatch.setHighlighs(searchHit.highlightFields());
+
+        // TODO: This is fine for now
+        if(hls.size() > 0)
+        queryMatch.setHighlighs(hls.get(0));
+
         return queryMatch;
     }
 
@@ -604,13 +619,13 @@ public class YPercolatorService extends AbstractComponent {
     private SearchContext createSearchContext(ShardId shardId,
                                               IndexService percolateIndexService,
                                               IndexShard indexShard,
-                                              Directory directory) throws IOException {
+                                              IndexSearcher searcher) throws IOException {
         SearchShardTarget searchShardTarget = new SearchShardTarget(clusterService.localNode().id(),
                 shardId.getIndex(), shardId.id());
 
         ShardSearchLocalRequest shardSearchLocalRequest = new ShardSearchLocalRequest(
                 new ShardId("local_index", 0), 0, SearchType.QUERY_AND_FETCH, null, null, false);
-        DocSearcher docSearcher = new DocSearcher(new IndexSearcher(DirectoryReader.open(directory)));
+        DocSearcher docSearcher = new DocSearcher(searcher);
         Counter counter = Counter.newCounter();
 
         return new DefaultSearchContext(
