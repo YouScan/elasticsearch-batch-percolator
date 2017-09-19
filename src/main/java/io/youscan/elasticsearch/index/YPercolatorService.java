@@ -443,7 +443,7 @@ public class YPercolatorService extends AbstractComponent {
                 for (SearchHit searchHit  : context.fetchResult().hits()) {
                     String id = searchHit.getId();
 
-                    List<Map<String, HighlightField>> hls = new ArrayList<>();
+                    Map<String, HighlightField> hls = null;
                     if(context.highlight() != null){
 
                         InternalSearchHit internalSearchHit = (InternalSearchHit) searchHit;
@@ -464,7 +464,7 @@ public class YPercolatorService extends AbstractComponent {
                         FetchSubPhase.HitContext hitContext = new FetchSubPhase.HitContext();
                         hitContext.reset(internalSearchHit, readerContext, docId, context.searcher());
                         highlightPhase.hitExecute(context, hitContext);
-                        hls.add(hitContext.hit().getHighlightFields());
+                        hls = hitContext.hit().getHighlightFields();
                     }
 
                     Integer slot = slotIds.get(id);
@@ -488,13 +488,12 @@ public class YPercolatorService extends AbstractComponent {
         return Tuple.tuple(responses, null);
     }
 
-    private QueryMatch getQueryMatch(Map.Entry<String, QueryAndSource> entry, SearchHit searchHit, List<Map<String, HighlightField>> hls) {
+    private QueryMatch getQueryMatch(Map.Entry<String, QueryAndSource> entry, SearchHit searchHit, Map<String, HighlightField> hls) {
         QueryMatch queryMatch = new QueryMatch();
         queryMatch.setQueryId(entry.getKey());
 
-        // TODO: This is fine for now
-        if(hls.size() > 0)
-        queryMatch.setHighlighs(hls.get(0));
+        if(hls != null)
+            queryMatch.setHighlighs(hls);
 
         return queryMatch;
     }
