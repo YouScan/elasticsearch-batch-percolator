@@ -1,7 +1,11 @@
 package io.youscan.elasticsearch;
 
 import com.meltwater.elasticsearch.plugin.BatchPercolatorPlugin;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.client.Requests;
+import org.elasticsearch.cluster.health.ClusterHealthStatus;
+import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
@@ -22,6 +26,8 @@ import java.util.Map;
 import static com.google.common.collect.Maps.newHashMap;
 import static org.elasticsearch.common.settings.Settings.Builder.EMPTY_SETTINGS;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 
 public abstract class AbstractNodesTests {
 
@@ -102,6 +108,22 @@ public abstract class AbstractNodesTests {
         highlightBuilder.toXContent(builder, new ToXContent.MapParams(Collections.<String, String>emptyMap()));
         builder.endObject();
         return builder;
+    }
+
+    /**
+     * Ensures the cluster has a green state via the cluster health API. This method will also wait for relocations.
+     * It is useful to ensure that all action on the cluster have finished and all shards that were currently relocating
+     * are now allocated and started.
+     */
+    public ClusterHealthStatus ensureGreen(Client client, String... indices) {
+        ClusterHealthResponse actionGet = client.admin().cluster()
+                .health(Requests.clusterHealthRequest(indices).waitForGreenStatus().waitForEvents(Priority.LANGUID).waitForRelocatingShards(0)).actionGet();
+        if (actionGet.isTimedOut()) {
+            logger.info("ensureGreen timed out, cluster state:\n{}\n{}", client.admin().cluster().prepareState().get().getState().prettyPrint(), client.admin().cluster().preparePendingClusterTasks().get().prettyPrint());
+            assertThat("timed out waiting for green state", actionGet.isTimedOut(), equalTo(false));
+        }
+        assertThat(actionGet.getStatus(), equalTo(ClusterHealthStatus.GREEN));
+        return actionGet.getStatus();
     }
 
 }
