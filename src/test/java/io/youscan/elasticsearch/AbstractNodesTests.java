@@ -9,6 +9,7 @@ import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
@@ -22,6 +23,8 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import static com.google.common.collect.Maps.newHashMap;
 import static org.elasticsearch.common.settings.Settings.Builder.EMPTY_SETTINGS;
@@ -126,5 +129,19 @@ public abstract class AbstractNodesTests {
         return actionGet.getStatus();
     }
 
+    public void closeNode(String id) {
+        Client client = clients.remove(id);
+        if (client != null) {
+            client.close();
+        }
+        Node node = nodes.remove(id);
+        if (node != null) {
+            node.close();
+        }
+    }
+
+    public void waitForYellowStatus(Client client) throws ExecutionException, InterruptedException {
+        client.admin().cluster().prepareHealth().setWaitForYellowStatus().setTimeout(new TimeValue(10, TimeUnit.SECONDS)).execute().get();
+    }
 }
 
