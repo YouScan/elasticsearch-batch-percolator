@@ -233,7 +233,10 @@ public class YPercolatorQueriesRegistry extends AbstractIndexShardComponent impl
 
                     Query query = new ConstantScoreQuery(
                             indexCache.query().doCache(
-                                    new QueryWrapperFilter(new TermQuery(new Term(TypeFieldMapper.NAME, YPercolatorService.TYPE_NAME))).createWeight(searcher.searcher(), false),
+
+                                    new TermQuery(new Term(TypeFieldMapper.NAME, YPercolatorService.TYPE_NAME))
+                                            .createWeight(searcher.searcher(), false),
+
                                     new UsageTrackingQueryCachingPolicy()
                             ).getQuery()
                     );
