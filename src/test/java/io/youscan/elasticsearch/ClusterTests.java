@@ -30,7 +30,6 @@ public class ClusterTests extends AbstractNodesTests {
         closeAllNodesAndClear();
     }
 
-
     @Test
     public void usingRemoteTransport() throws IOException {
 

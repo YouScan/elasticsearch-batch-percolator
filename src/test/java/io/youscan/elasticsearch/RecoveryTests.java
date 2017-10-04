@@ -29,9 +29,6 @@ public class RecoveryTests extends AbstractNodesTests {
     }
 
     @Test
-    @Ignore("This issue exists in official percolator as well. Fixed in elasticsearch 2.0. " +
-            "When running on 2.0 it fails on recovery with UnsupportedOperationException[Query QueryWrapperFilter(_type:~ypercolator) does not implement createWeight]; ]\n" +
-            "[elasticsearch[node1][generic][T#3]] WARN org.elasticsearch.indices.cluster - [node1] [[test][1]] marking and sending shard failed due to [failed recovery]")
     public void testRestartNode() throws IOException, ExecutionException, InterruptedException {
 
         ArrayList<Class<? extends Plugin>> classpathPlugins = new ArrayList<>();
