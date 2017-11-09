@@ -30,7 +30,6 @@ import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.xcontent.*;
@@ -184,7 +183,8 @@ public class YPercolatorService extends AbstractComponent {
 
             // We use a RAMDirectory here instead of a MemoryIndex.
             // In our tests MemoryIndex had worse indexing performance for normal sized quiddities.
-            RamDirectoryPercolatorIndex index = new RamDirectoryPercolatorIndex(indexShard.mapperService());
+            Tuple<Integer, ParsedDocument> firstDoc = parsedDocuments.get(0);
+            RamDirectoryPercolatorIndex index = new RamDirectoryPercolatorIndex(firstDoc.v2().type(), indexShard.mapperService());
             directory = index.indexDocuments(docs);
 
             long filteringStart = System.currentTimeMillis();

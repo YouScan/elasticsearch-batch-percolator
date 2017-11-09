@@ -148,7 +148,7 @@ public class BatchPercolatorService extends AbstractComponent {
 
         // We use a RAMDirectory here instead of a MemoryIndex.
         // In our tests MemoryIndex had worse indexing performance for normal sized quiddities.
-        RamDirectoryPercolatorIndex index = new RamDirectoryPercolatorIndex(indexShard.mapperService());
+        RamDirectoryPercolatorIndex index = new RamDirectoryPercolatorIndex(request.documentType(), indexShard.mapperService());
         Directory directory = index.indexDocuments(parsedDocuments);
 
         SearchContext context = createSearchContext(request, percolateIndexService, indexShard, directory);
