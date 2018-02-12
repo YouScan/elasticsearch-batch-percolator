@@ -7,7 +7,7 @@ pipeline {
         stage("Build") {
             agent {
                 docker {
-                    image 'openjdk:8-jre-alpine'
+                    image '4.5.1-jdk8-alpine'
                     args '-u 0'
                 }
             }
