@@ -17,7 +17,7 @@ pipeline {
             steps {
                 sh './gradlew pluginZipFile'
                 withCredentials([usernamePassword(credentialsId: 'maven_nexus', usernameVariable: 'MAVEN_USER', passwordVariable: 'MAVEN_PASSWORD')]) {
-                    sh './gradlew publishing'
+                    sh './gradlew publish'
                 }
             }
         }
