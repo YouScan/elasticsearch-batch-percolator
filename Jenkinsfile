@@ -3,6 +3,9 @@ pipeline {
     options {
         timestamps()
     }
+    environment {
+        MAVEN_URL = 'http://nexus.yscan.local/repository/maven-releases/'
+    }
     stages {
         stage("Build") {
             agent {
@@ -13,6 +16,9 @@ pipeline {
             }
             steps {
                 sh './gradlew pluginZipFile'
+                withCredentials([usernamePassword(credentialsId: 'maven_nexus', usernameVariable: 'MAVEN_USER', passwordVariable: 'MAVEN_PASSWORD')]) {
+                    sh './gradlew publishing'
+                }
             }
         }
     }
