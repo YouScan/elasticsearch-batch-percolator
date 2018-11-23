@@ -15,9 +15,9 @@ pipeline {
                 }
             }
             steps {
-                sh './gradlew pluginZipFile'
+                sh './gradlew pluginZipFile -P version=2.0.$BUILD_NUMBER$VERSION_SUFFIX'
                 withCredentials([usernamePassword(credentialsId: 'maven_nexus', usernameVariable: 'MAVEN_USER', passwordVariable: 'MAVEN_PASSWORD')]) {
-                    sh './gradlew publish'
+                    sh './gradlew publish -P version=2.0.$BUILD_NUMBER$VERSION_SUFFIX'
                 }
             }
         }
