@@ -22,7 +22,7 @@ import java.util.Map;
 
 public class YQueriesLoaderCollector  implements Collector, LeafCollector {
 
-    public static final String ID_FIELD = "id";
+    public static final String ID_FIELD = "ysid"; //We're using custom id field. Elastic ignores "id"
     private final Map<String, QueryAndSource> queries = Maps.newHashMap();
     private final FieldsVisitor fieldsVisitor;
     private final YPercolatorQueriesRegistry percolator;
